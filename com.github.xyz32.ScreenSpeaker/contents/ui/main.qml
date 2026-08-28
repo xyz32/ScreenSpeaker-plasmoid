@@ -9,8 +9,10 @@ import org.kde.kirigami as Kirigami
 PlasmoidItem {
     id: root
 
-    // Which channel this instance visualizes (from config): 0=Left 1=Right
+    // Per-instance configuration: channel and cabinet skin.
+    // channel: 0=Left, 1=Right; skin: 0=Cherry Wood, 1=Dark Grey.
     readonly property int channel: Plasmoid.configuration.channel
+    readonly property int skin: Plasmoid.configuration.skin
 
     // Room light horizontal direction, mirrored per channel so a placed L/R
     // pair is lit symmetrically. Left speaker (0) is lit from the RIGHT (light
@@ -490,22 +492,26 @@ PlasmoidItem {
             height: Math.min(availableHeight, fullRep.cfgHeight)
             width: height * fullRep.aspect
 
-            // Main Speaker Cabinet
-            Rectangle {
+            // The reusable skin owns the cabinet surface and feet. The driver
+            // stack remains here so every skin shares identical audio visuals.
+            Item {
                 id: cabinet
-                anchors.fill: parent
-                color: "#1a1816"
-                border.color: "#0d0c0b"
-                border.width: 4
-                radius: 4
+                anchors.top: parent.top
+                width: parent.width
+                height: parent.height * 0.978
 
-                Rectangle {
-                    anchors.fill: parent
-                    color: "transparent"
-                    border.color: "#000000"
-                    border.width: 8
-                    opacity: 0.6
-                    radius: 4
+                Loader {
+                    id: skinLoader
+                    width: fitBox.width
+                    height: fitBox.height
+                    source: root.skin === 0
+                            ? Qt.resolvedUrl("CherryWoodSkin.qml")
+                            : Qt.resolvedUrl("DarkGreySkin.qml")
+                    onLoaded: {
+                        item.lightFromLeft = Qt.binding(function() {
+                            return root.lightFromLeft
+                        })
+                    }
                 }
 
                 Column {

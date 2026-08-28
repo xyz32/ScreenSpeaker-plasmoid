@@ -9,11 +9,12 @@ Kirigami.FormLayout {
     // Plasma passes these as initial properties when constructing the page.
     property string title: i18n("General")
     property int cfg_channelDefault: 0
+    property int cfg_skinDefault: 0
     property int cfg_speakerHeightDefault: 500
 
-    // Plasma's cfg_<key> convention binds config key 'channel' to the
-    // combo index (0 = Left, 1 = Right).
+    // Plasma's cfg_<key> convention binds each control to KConfig.
     property alias cfg_channel: channelCombo.currentIndex
+    property alias cfg_skin: skinCombo.currentIndex
     property alias cfg_speakerHeight: heightSpin.value
 
     // Top breathing room — Kirigami.FormLayout otherwise puts the first
@@ -25,7 +26,13 @@ Kirigami.FormLayout {
     ComboBox {
         id: channelCombo
         Kirigami.FormData.label: i18n("Speaker channel:")
-        model: ["Left", "Right"]
+        model: [i18n("Left"), i18n("Right")]
+    }
+
+    ComboBox {
+        id: skinCombo
+        Kirigami.FormData.label: i18n("Cabinet skin:")
+        model: [i18n("Cherry Wood"), i18n("Dark Grey")]
     }
 
     SpinBox {
