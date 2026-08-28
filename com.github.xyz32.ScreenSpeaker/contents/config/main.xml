@@ -8,6 +8,10 @@
         <entry name="channel" type="Int">
             <default>0</default>
         </entry>
+        <!-- 0 = Cherry Wood, 1 = Dark Grey -->
+        <entry name="skin" type="Int">
+            <default>0</default>
+        </entry>
         <!-- Speaker height in pixels. Width is derived from the fixed
              300:800 aspect ratio. Set the same value on every instance to
              keep a stereo pair matched. -->
