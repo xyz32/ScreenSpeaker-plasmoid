@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Radu",
+                "Email": "xyz.relativity@gmail.com"
+            }
+        ],
+        "Category": "Multimedia",
+        "Description": "Animated speaker membranes reacting to real-time system audio.",
+        "Icon": "audio-speakers",
+        "Id": "com.github.xyz32.ScreenSpeaker",
+        "License": "GPL-2.0-or-later",
+        "Name": "Vintage Speaker Simulation",
+        "Version": "1.0"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
