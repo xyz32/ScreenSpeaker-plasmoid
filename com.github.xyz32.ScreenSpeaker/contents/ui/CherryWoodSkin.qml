@@ -77,7 +77,8 @@ Item {
             y: root.bodyHeight - 0.5
 
             Rectangle {
-                x: parent.width * 0.05
+                // Light from the left casts right; light from the right casts left.
+                x: root.lightFromLeft ? parent.width * 0.05 : -parent.width * 0.05
                 y: parent.height * 0.18
                 width: parent.width
                 height: parent.height

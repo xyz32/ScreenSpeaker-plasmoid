@@ -32,7 +32,7 @@ Kirigami.FormLayout {
     ComboBox {
         id: skinCombo
         Kirigami.FormData.label: i18n("Cabinet skin:")
-        model: [i18n("Cherry Wood"), i18n("Dark Grey")]
+        model: [i18n("Cherry Wood"), i18n("Dark Grey"), i18n("Mahogany")]
     }
 
     SpinBox {

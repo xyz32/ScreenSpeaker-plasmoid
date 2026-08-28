@@ -10,7 +10,8 @@ PlasmoidItem {
     id: root
 
     // Per-instance configuration: channel and cabinet skin.
-    // channel: 0=Left, 1=Right; skin: 0=Cherry Wood, 1=Dark Grey.
+    // channel: 0=Left, 1=Right; skin: 0=Cherry Wood, 1=Dark Grey,
+    // 2=Mahogany.
     readonly property int channel: Plasmoid.configuration.channel
     readonly property int skin: Plasmoid.configuration.skin
 
@@ -504,9 +505,11 @@ PlasmoidItem {
                     id: skinLoader
                     width: fitBox.width
                     height: fitBox.height
-                    source: root.skin === 0
-                            ? Qt.resolvedUrl("CherryWoodSkin.qml")
-                            : Qt.resolvedUrl("DarkGreySkin.qml")
+                    source: root.skin === 1
+                            ? Qt.resolvedUrl("DarkGreySkin.qml")
+                            : root.skin === 2
+                              ? Qt.resolvedUrl("MahoganySkin.qml")
+                              : Qt.resolvedUrl("CherryWoodSkin.qml")
                     onLoaded: {
                         item.lightFromLeft = Qt.binding(function() {
                             return root.lightFromLeft
