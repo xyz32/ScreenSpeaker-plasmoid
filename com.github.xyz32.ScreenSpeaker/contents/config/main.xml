@@ -8,7 +8,7 @@
         <entry name="channel" type="Int">
             <default>0</default>
         </entry>
-        <!-- 0 = Cherry Wood, 1 = Dark Grey -->
+        <!-- 0 = Cherry Wood, 1 = Dark Grey, 2 = Mahogany -->
         <entry name="skin" type="Int">
             <default>0</default>
         </entry>
