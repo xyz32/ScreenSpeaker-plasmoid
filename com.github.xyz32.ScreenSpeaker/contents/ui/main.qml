@@ -518,10 +518,13 @@ PlasmoidItem {
                 }
 
                 Column {
+                id: driverColumn
                 anchors.centerIn: parent
                 width: parent.width * 0.85
                 height: parent.height * 0.9
                 spacing: parent.height * 0.03
+                // Midrange's original absolute screw size: 65% × 9%.
+                readonly property real mountingScrewSize: width * 0.0585
 
                 // --- 1. TWEETER (Highs) ---
                 Item {
@@ -534,7 +537,7 @@ PlasmoidItem {
                         color: "#2b2b2b"
                         border.color: "#4a4a4a"
                         border.width: 2
-                        radius: 4
+                        radius: 6
                     }
 
                     // Four corner mounting screws on the enclosing housing.
@@ -542,8 +545,8 @@ PlasmoidItem {
                         model: 4
                         Loader {
                             sourceComponent: screwComponent
-                            readonly property real sz: parent.width * 0.10
-                            readonly property real inset: parent.width * 0.06
+                            readonly property real sz: driverColumn.mountingScrewSize
+                            readonly property real inset: parent.width * 0.075
                             width: sz; height: sz
                             x: (index % 2 === 0) ? inset : parent.width - sz - inset
                             y: (index < 2) ? inset : parent.height - sz - inset
@@ -628,7 +631,7 @@ PlasmoidItem {
                         color: "#252525"
                         border.color: "#4a4a4a"
                         border.width: 3
-                        radius: 6
+                        radius: 8
                     }
 
                     // Four corner mounting screws on the enclosing housing.
@@ -636,8 +639,8 @@ PlasmoidItem {
                         model: 4
                         Loader {
                             sourceComponent: screwComponent
-                            readonly property real sz: parent.width * 0.09
-                            readonly property real inset: parent.width * 0.055
+                            readonly property real sz: driverColumn.mountingScrewSize
+                            readonly property real inset: parent.width * 0.075
                             width: sz; height: sz
                             x: (index % 2 === 0) ? inset : parent.width - sz - inset
                             y: (index < 2) ? inset : parent.height - sz - inset
@@ -719,7 +722,7 @@ PlasmoidItem {
                         color: "#303030"
                         border.color: "#5e5e5e"
                         border.width: 4
-                        radius: 8
+                        radius: 10
                     }
 
                     // Four corner mounting screws on the enclosing housing.
@@ -727,8 +730,8 @@ PlasmoidItem {
                         model: 4
                         Loader {
                             sourceComponent: screwComponent
-                            readonly property real sz: parent.width * 0.08
-                            readonly property real inset: parent.width * 0.05
+                            readonly property real sz: driverColumn.mountingScrewSize
+                            readonly property real inset: parent.width * 0.08
                             width: sz; height: sz
                             x: (index % 2 === 0) ? inset : parent.width - sz - inset
                             y: (index < 2) ? inset : parent.height - sz - inset
