@@ -816,7 +816,10 @@ PlasmoidItem {
                         font.family: "Serif"
                         color: "#e6d7b8"
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.top: parent.top
+                        // The footer starts one Column spacing below the woofer.
+                        // Center the logo in the full gap from that woofer edge
+                        // to the top edge of the air port.
+                        y: (-driverColumn.spacing + bassPort.y - height) / 2
                     }
 
                     // Channel indicator badge (L / R / M) — click to cycle
@@ -834,7 +837,7 @@ PlasmoidItem {
                         color: badgeMouse.containsMouse ? "#153029" : "#0d0c0b"
                         border.color: "#00a887"
                         border.width: 2
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenter: bassPort.verticalCenter
 
                         // Slide to the channel's side. The Right position uses
                         // `badgeSize` (not `width`) so it recomputes in lockstep
@@ -866,9 +869,11 @@ PlasmoidItem {
                         }
                     }
 
-                    // Bass reflex port
+                    // Bass reflex port — about one fifth of the woofer
+                    // diameter, lowered into the cabinet margin to clear the logo.
                     Rectangle {
-                        width: parent.height * 0.45
+                        id: bassPort
+                        width: parent.height * 0.70
                         height: width
                         radius: width / 2
                         color: "#000000"
@@ -876,6 +881,7 @@ PlasmoidItem {
                         border.width: 3
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
+                        anchors.bottomMargin: -parent.height * 0.12
                     }
                 }
             }
