@@ -5,10 +5,10 @@ Item {
     id: root
 
     property real lightSourceX: 0.5
+    property bool isSubwoofer: false
     readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
         (0.5 - lightSourceX) / 0.18))
-    readonly property bool squareCabinet: width >= height * 0.8
-    readonly property real footHeightRatio: squareCabinet ? 0.044 : 0.022
+    readonly property real footHeightRatio: isSubwoofer ? 0.044 : 0.022
     readonly property real bodyHeight: height * (1.0 - footHeightRatio)
 
     Rectangle {
@@ -74,9 +74,8 @@ Item {
     Repeater {
         model: 2
         Item {
-            // The subwoofer defaults to half the stereo speaker height, so
-            // doubled ratios give both cabinets the same absolute foot size.
-            width: root.height * (root.squareCabinet ? 0.12 : 0.06)
+            // Default subwoofer feet match the stereo feet in absolute size.
+            width: root.height * (root.isSubwoofer ? 0.12 : 0.06)
             height: root.height * root.footHeightRatio
             x: index === 0
                ? root.width * 0.12

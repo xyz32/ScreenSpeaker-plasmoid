@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Shapes
@@ -57,12 +56,17 @@ PlasmoidItem {
     property var audioLevels: [0.0, 0.0, 0.0]
     property var audioActivity: [0.0, 0.0, 0.0]
 
+    // Positional wire-format contract with speaker-daemon.py.
+    readonly property int stereoPayloadSize: 12
+    readonly property int ultraEnergyOffset: 12
+    readonly property int ultraActivityOffset: 14
+
     readonly property real originalWidth: 300
     readonly property real originalHeight: 800
 
     // Shared-daemon state. All instances use a FIXED data path (no PID suffix)
     // so the first instance launches the daemon and the rest discover the same
-    // one via its singleton lock. One parec + one FFT serves every speaker.
+    // one via its singleton lock. One pw-record stream + FFT serves every speaker.
     property string runtimeDir: ""
     property string dataPath: ""
     property string alivePath: ""
@@ -96,7 +100,7 @@ PlasmoidItem {
         }
     }
 
-    // --- HTTP polling (30fps, in-process, no subprocess overhead) ---
+    // --- HTTP polling (~60fps, in-process, no subprocess overhead) ---
     property var pollXhr: null
 
     function pollOnce() {
@@ -119,17 +123,17 @@ PlasmoidItem {
             // by dedicated 20-80 Hz stereo energy/activity values:
             //   ... Le_ultra Re_ultra La_ultra Ra_ultra
             var parts = txt.split(/\s+/)
-            if (parts.length < 12) return
+            if (parts.length < root.stereoPayloadSize) return
 
             var eBass, eMid, eHigh, aBass, aMid, aHigh
             if (root.isSubwoofer) {
                 // React only to dedicated 20-80 Hz energy. max() preserves
                 // hard-panned ultra-low bass without summing above 1.0. A zero
                 // fallback keeps Subwoofer mode silent with an old 12-value daemon.
-                eBass = Math.max(parseFloat(parts[12]) || 0,
-                                 parseFloat(parts[13]) || 0)
-                aBass = Math.max(parseFloat(parts[14]) || 0,
-                                 parseFloat(parts[15]) || 0)
+                eBass = Math.max(parseFloat(parts[root.ultraEnergyOffset]) || 0,
+                                 parseFloat(parts[root.ultraEnergyOffset + 1]) || 0)
+                aBass = Math.max(parseFloat(parts[root.ultraActivityOffset]) || 0,
+                                 parseFloat(parts[root.ultraActivityOffset + 1]) || 0)
                 eMid = 0; eHigh = 0
                 aMid = 0; aHigh = 0
             } else {
@@ -533,9 +537,8 @@ PlasmoidItem {
             onTriggered: fullRep.pushSizeToConfig()
         }
 
-        // Channel badge letter and accessible full name.
-        readonly property string channelLabel: ["L", "R", "S"][root.channel]
-        readonly property string channelName: [i18n("Left"), i18n("Right"), i18n("Subwoofer")][root.channel]
+        // Passive channel badge letter for L/R speakers.
+        readonly property string channelLabel: root.channel === 0 ? "L" : "R"
 
         // Preserve 300:800 for L/R and 1:1 for Subwoofer. The available
         // applet area limits growth, while cfgHeight caps config-driven shrink.
@@ -559,7 +562,11 @@ PlasmoidItem {
                 id: cabinet
                 anchors.top: parent.top
                 width: parent.width
-                height: parent.height * 0.978
+                // Keep the drivers inside the cabinet body rather than inside
+                // the foot area. Every skin exposes the same bodyHeight contract.
+                height: skinLoader.item
+                        ? skinLoader.item.bodyHeight
+                        : parent.height * (root.isSubwoofer ? 0.956 : 0.978)
 
                 Loader {
                     id: skinLoader
@@ -573,6 +580,9 @@ PlasmoidItem {
                     onLoaded: {
                         item.lightSourceX = Qt.binding(function() {
                             return root.lightSourceX
+                        })
+                        item.isSubwoofer = Qt.binding(function() {
+                            return root.isSubwoofer
                         })
                     }
                 }
@@ -978,6 +988,7 @@ PlasmoidItem {
                     height: parent.height * (root.isSubwoofer ? 0.17 : 0.12)
 
                     Text {
+                        id: brandLogo
                         text: "Technics"
                         font.bold: true
                         font.pixelSize: parent.height * 0.35
@@ -1020,21 +1031,31 @@ PlasmoidItem {
                         }
                     }
 
-                    // Bass reflex port — circular for L/R, and a wider,
+                    // Bass reflex port — circular for L/R, and a wide, thin,
                     // heavily rounded horizontal vent for the subwoofer.
                     Rectangle {
                         id: bassPort
+                        readonly property real bottomInset: root.isSubwoofer
+                            ? parent.height * 0.03
+                            : -parent.height * 0.12
+                        readonly property real desiredSubwooferHeight: parent.width * 0.07
+                        readonly property real maximumSubwooferHeight: Math.max(1,
+                            parent.height - bottomInset
+                            - brandLogo.implicitHeight - driverColumn.spacing)
                         width: root.isSubwoofer
                                ? parent.width * 0.74
                                : parent.height * 0.70
-                        height: root.isSubwoofer ? parent.width * 0.084 : width
+                        height: root.isSubwoofer
+                                ? Math.min(desiredSubwooferHeight,
+                                           maximumSubwooferHeight)
+                                : width
                         radius: root.isSubwoofer ? height / 2 : width / 2
                         color: "#000000"
                         border.color: "#1a1a1a"
                         border.width: 3
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: -parent.height * 0.12
+                        anchors.bottomMargin: bottomInset
                     }
                 }
 
