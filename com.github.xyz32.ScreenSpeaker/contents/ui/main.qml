@@ -116,20 +116,26 @@ PlasmoidItem {
             if (!txt) return
 
             // Daemon format: the original 12 energy/activity values followed
-            // by dedicated 20-80 Hz stereo energy/activity values:
-            //   ... Le_ultra Re_ultra La_ultra Ra_ultra
+            // by dedicated 20-80 Hz stereo values and optional real-LFE values:
+            //   ... Le_ultra Re_ultra La_ultra Ra_ultra [LFEe LFEa]
             var parts = txt.split(/\s+/)
             if (parts.length < 12) return
 
             var eBass, eMid, eHigh, aBass, aMid, aHigh
             if (root.isSubwoofer) {
-                // React only to dedicated 20-80 Hz energy. max() preserves
-                // hard-panned ultra-low bass without summing above 1.0. A zero
-                // fallback keeps Subwoofer mode silent with an old 12-value daemon.
-                eBass = Math.max(parseFloat(parts[12]) || 0,
-                                 parseFloat(parts[13]) || 0)
-                aBass = Math.max(parseFloat(parts[14]) || 0,
-                                 parseFloat(parts[15]) || 0)
+                if (parts.length >= 18) {
+                    // A 2.1 sink exposes a real LFE channel; prefer its own
+                    // 20-80 Hz energy and activity over the stereo downmix.
+                    eBass = parseFloat(parts[16]) || 0
+                    aBass = parseFloat(parts[17]) || 0
+                } else {
+                    // Stereo fallback: react when ultra-low bass is present in
+                    // either channel without summing above 1.0.
+                    eBass = Math.max(parseFloat(parts[12]) || 0,
+                                     parseFloat(parts[13]) || 0)
+                    aBass = Math.max(parseFloat(parts[14]) || 0,
+                                     parseFloat(parts[15]) || 0)
+                }
                 eMid = 0; eHigh = 0
                 aMid = 0; aHigh = 0
             } else {
