@@ -4,13 +4,13 @@
 Captures STEREO audio from a PulseAudio/PipeWire sink monitor via `pw-record`
 (marked as a sink-monitor capture so KDE shows no microphone indicator),
 computes an FFT per channel, condenses into 3 logarithmic bands (bass, mid, treble)
-for each channel, and serves the latest snapshot over localhost HTTP for the QML
-widget to poll.
+plus a dedicated ultra-low band (20-80 Hz), and serves the latest snapshot over
+localhost HTTP for the QML widget to poll.
 
-Output format: 12 space-separated floats — six band ENERGIES followed by six
-band ACTIVITIES:
+Output format: the original 12 values followed by four ultra-low values:
   'Le_bass Le_mid Le_treble Re_bass Re_mid Re_treble
-   La_bass La_mid La_treble Ra_bass Ra_mid Ra_treble'
+   La_bass La_mid La_treble Ra_bass Ra_mid Ra_treble
+   Le_ultra Re_ultra La_ultra Ra_ultra'
 energy drives vibration amplitude; activity (fraction of active bins) drives
 vibration rate.
 
@@ -142,6 +142,15 @@ def build_band_indices(freqs, fmin=30.0, fmax=16000.0):
     return out
 
 
+def build_ultra_low_indices(freqs, fmin=20.0, fmax=80.0):
+    """Dedicated subwoofer band covering only 20-80 Hz."""
+    lo = int(np.searchsorted(freqs, fmin, side="left"))
+    hi = int(np.searchsorted(freqs, fmax, side="left"))
+    if hi <= lo:
+        hi = lo + 1
+    return lo, min(hi, len(freqs))
+
+
 def main():
     args = parse_args()
     if args.daemonize:
@@ -207,12 +216,14 @@ def main():
     window = np.hanning(fft_size).astype(np.float32)
     freqs = np.fft.rfftfreq(fft_size, 1.0 / args.rate)
     bands = build_band_indices(freqs)
+    ultra_low = build_ultra_low_indices(freqs)
 
-    # Per-channel sliding-window ring buffers and smoothing state.
+    # Per-channel sliding-window ring buffers and smoothing state. The fourth
+    # smoothing slot belongs to the independent 20-80 Hz subwoofer band.
     ring_l = np.zeros(fft_size, dtype=np.float32)
     ring_r = np.zeros(fft_size, dtype=np.float32)
-    smooth_l = np.zeros(3, dtype=np.float32)
-    smooth_r = np.zeros(3, dtype=np.float32)
+    smooth_l = np.zeros(4, dtype=np.float32)
+    smooth_r = np.zeros(4, dtype=np.float32)
 
     decay = float(np.clip(args.smoothing, 0.0, 0.98))
     sens = float(max(0.05, args.sensitivity))
@@ -240,13 +251,21 @@ def main():
         norm = np.clip((db + 60.0) / 60.0, 0.0, 1.0) * sens
         norm = np.clip(norm, 0.0, 1.0)
         # rise fast, fall slowly
-        smooth[:] = np.maximum(norm, smooth * decay)
+        smooth[:3] = np.maximum(norm, smooth[:3] * decay)
 
         activity = np.fromiter(
             (float(np.mean(spec_db[lo:hi] > activity_floor_db)) for lo, hi in bands),
             dtype=np.float32, count=3,
         )
-        return smooth, activity
+
+        ulo, uhi = ultra_low
+        ultra_peak = spec[ulo:uhi].max()
+        ultra_db = 20.0 * np.log10(ultra_peak + 1e-9)
+        ultra_norm = float(np.clip((ultra_db + 60.0) / 60.0, 0.0, 1.0) * sens)
+        ultra_norm = float(np.clip(ultra_norm, 0.0, 1.0))
+        smooth[3] = max(ultra_norm, smooth[3] * decay)
+        ultra_activity = float(np.mean(spec_db[ulo:uhi] > activity_floor_db))
+        return smooth[:3], activity, smooth[3], ultra_activity
 
     alive_path = args.output + ".alive"
     try:
@@ -291,16 +310,16 @@ def main():
             ring_r[:-chunk] = ring_r[chunk:]
             ring_r[-chunk:] = right
 
-            sl, al = process_channel(ring_l, smooth_l)
-            sr, ar = process_channel(ring_r, smooth_r)
+            sl, al, ul, aul = process_channel(ring_l, smooth_l)
+            sr, ar, ur, aur = process_channel(ring_r, smooth_r)
 
-            # Payload = 6 energies then 6 activities:
-            # Le_bass Le_mid Le_treble Re_bass Re_mid Re_treble
-            # La_bass La_mid La_treble Ra_bass Ra_mid Ra_treble
+            # Preserve the original 12-value prefix and append ultra-low stereo
+            # energy/activity for Subwoofer mode.
             line = (f"{sl[0]:.3f} {sl[1]:.3f} {sl[2]:.3f} "
                     f"{sr[0]:.3f} {sr[1]:.3f} {sr[2]:.3f} "
                     f"{al[0]:.3f} {al[1]:.3f} {al[2]:.3f} "
-                    f"{ar[0]:.3f} {ar[1]:.3f} {ar[2]:.3f}")
+                    f"{ar[0]:.3f} {ar[1]:.3f} {ar[2]:.3f} "
+                    f"{ul:.3f} {ur:.3f} {aul:.3f} {aur:.3f}")
             with _state_lock:
                 _state["payload"] = line
 
