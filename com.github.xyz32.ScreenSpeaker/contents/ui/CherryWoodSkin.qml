@@ -4,7 +4,9 @@ import QtQuick
 Item {
     id: root
 
-    property bool lightFromLeft: true
+    property real lightSourceX: 0.5
+    readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
+        (0.5 - lightSourceX) / 0.18))
     readonly property real bodyHeight: height * 0.978
 
     Rectangle {
@@ -55,7 +57,8 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: parent.radius
-            rotation: root.lightFromLeft ? 0 : 180
+            rotation: root.lightBias >= 0 ? 0 : 180
+            opacity: Math.abs(root.lightBias)
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0.0; color: "#35ffffff" }
@@ -69,8 +72,11 @@ Item {
     Repeater {
         model: 2
         Item {
-            width: root.width * 0.16
-            height: root.height * 0.022
+            // The subwoofer defaults to half the stereo speaker height, so
+            // doubled ratios give both cabinets the same absolute foot size.
+            readonly property bool squareCabinet: root.width >= root.height * 0.8
+            width: root.height * (squareCabinet ? 0.12 : 0.06)
+            height: root.height * (squareCabinet ? 0.044 : 0.022)
             x: index === 0
                ? root.width * 0.12
                : root.width - width - root.width * 0.12
@@ -78,7 +84,7 @@ Item {
 
             Rectangle {
                 // Light from the left casts right; light from the right casts left.
-                x: root.lightFromLeft ? parent.width * 0.05 : -parent.width * 0.05
+                x: root.lightBias * parent.width * 0.05
                 y: parent.height * 0.18
                 width: parent.width
                 height: parent.height
@@ -90,7 +96,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: height * 0.28
-                rotation: root.lightFromLeft ? 0 : 180
+                rotation: root.lightBias >= 0 ? 0 : 180
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop { position: 0.0; color: "#596166" }

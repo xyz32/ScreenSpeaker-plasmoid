@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import QtQuick.Window
 import QtQuick.Shapes
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
@@ -10,15 +12,44 @@ PlasmoidItem {
     id: root
 
     // Per-instance configuration: channel and cabinet skin.
-    // channel: 0=Left, 1=Right; skin: 0=Cherry Wood, 1=Dark Grey,
-    // 2=Mahogany.
+    // channel: 0=Left, 1=Right, 2=Subwoofer; skin: 0=Cherry Wood,
+    // 1=Dark Grey, 2=Mahogany.
     readonly property int channel: Plasmoid.configuration.channel
     readonly property int skin: Plasmoid.configuration.skin
+    readonly property bool isSubwoofer: root.channel === 2
 
-    // Room light horizontal direction, mirrored per channel so a placed L/R
-    // pair is lit symmetrically. Left speaker (0) is lit from the RIGHT (light
-    // toward the pair's center); Right speaker (1) from the LEFT.
-    readonly property bool lightFromLeft: root.channel !== 0
+    // Continuous room-light position across the speaker face. 0.32 and 0.68
+    // preserve the accepted left/right shading at a screen edge; 0.5 is a
+    // balanced frontal light when the speaker is at the screen centre.
+    property real lightSourceX: 0.5
+    readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
+        (0.5 - lightSourceX) / 0.18))
+
+    function updateLightPosition() {
+        if (!root.visible || root.width <= 0 || Screen.width <= 0)
+            return
+        var globalCenter = root.mapToGlobal(root.width / 2, root.height / 2)
+        var screenHalf = Screen.width / 2
+        var screenCenter = Screen.virtualX + screenHalf
+        var offset = Math.max(-1.0, Math.min(1.0,
+            (globalCenter.x - screenCenter) / screenHalf))
+        // A speaker left of centre is lit from its right, and vice versa.
+        root.lightSourceX = 0.5 - offset * 0.18
+    }
+
+    Behavior on lightSourceX {
+        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+    }
+
+    // Plasma does not expose a dependable global-position change signal for
+    // desktop applets, so cheaply resample while the widget is visible.
+    Timer {
+        interval: 500
+        running: root.visible
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.updateLightPosition()
+    }
 
     // Audio levels for THIS instance: [Tweeter, Mid, Woofer] normalized 0.0-1.0
     // audioLevels = per-band ENERGY (drives vibration amplitude).
@@ -84,22 +115,35 @@ PlasmoidItem {
             var txt = (xhr.responseText || "").trim()
             if (!txt) return
 
-            // Daemon format (12 floats): 6 energies then 6 activities:
-            //   Le_bass Le_mid Le_treble Re_bass Re_mid Re_treble
-            //   La_bass La_mid La_treble Ra_bass Ra_mid Ra_treble
+            // Daemon format: the original 12 energy/activity values followed
+            // by dedicated 20-80 Hz stereo energy/activity values:
+            //   ... Le_ultra Re_ultra La_ultra Ra_ultra
             var parts = txt.split(/\s+/)
             if (parts.length < 12) return
 
-            // Channel offset into each 6-value group: Left = 0, Right = 3.
-            var o = (root.channel === 0) ? 0 : 3
-            var eBass = parseFloat(parts[o])     || 0
-            var eMid  = parseFloat(parts[o + 1]) || 0
-            var eHigh = parseFloat(parts[o + 2]) || 0
-            var aBass = parseFloat(parts[6 + o])     || 0
-            var aMid  = parseFloat(parts[6 + o + 1]) || 0
-            var aHigh = parseFloat(parts[6 + o + 2]) || 0
+            var eBass, eMid, eHigh, aBass, aMid, aHigh
+            if (root.isSubwoofer) {
+                // React only to dedicated 20-80 Hz energy. max() preserves
+                // hard-panned ultra-low bass without summing above 1.0. A zero
+                // fallback keeps Subwoofer mode silent with an old 12-value daemon.
+                eBass = Math.max(parseFloat(parts[12]) || 0,
+                                 parseFloat(parts[13]) || 0)
+                aBass = Math.max(parseFloat(parts[14]) || 0,
+                                 parseFloat(parts[15]) || 0)
+                eMid = 0; eHigh = 0
+                aMid = 0; aHigh = 0
+            } else {
+                // Channel offset into each 6-value group: Left = 0, Right = 3.
+                var o = (root.channel === 0) ? 0 : 3
+                eBass = parseFloat(parts[o])     || 0
+                eMid  = parseFloat(parts[o + 1]) || 0
+                eHigh = parseFloat(parts[o + 2]) || 0
+                aBass = parseFloat(parts[6 + o])     || 0
+                aMid  = parseFloat(parts[6 + o + 1]) || 0
+                aHigh = parseFloat(parts[6 + o + 2]) || 0
+            }
 
-            // Visual order is [Tweeter, Mid, Woofer] = [high, mid, bass]
+            // Visual order is [Tweeter, Mid, Woofer] = [high, mid, bass].
             root.audioLevels   = [eHigh, eMid, eBass]
             root.audioActivity = [aHigh, aMid, aBass]
             if (root.status !== "running") root.status = "running"
@@ -198,7 +242,8 @@ PlasmoidItem {
             var dir = stdout.trim() || "/tmp"
             root.runtimeDir = dir
             // FIXED path shared by every instance (no PID) so the daemon is a singleton.
-            root.dataPath = dir + "/plasma-speaker.dat"
+            // v2 appends a dedicated ultra-low stereo band to the payload.
+            root.dataPath = dir + "/plasma-speaker-v2.dat"
             root.alivePath = root.dataPath + ".alive"
             root.portPath = root.dataPath + ".port"
             root.logPath = dir + "/plasma-speaker.log"
@@ -254,7 +299,10 @@ PlasmoidItem {
         shell.run("touch '" + alivePath + "'")
     }
 
-    Component.onCompleted: resolveRuntimeDir()
+    Component.onCompleted: {
+        resolveRuntimeDir()
+        updateLightPosition()
+    }
 
     // NOTE: no daemon kill on destruction — other instances may still need it.
     // The daemon self-exits when the shared .alive heartbeat goes stale (30s),
@@ -306,19 +354,16 @@ PlasmoidItem {
             // share one light source; only the surface curvature flips which
             // slope is lit.
             property bool inverted: false
-            // Horizontal light direction. true = light from the LEFT; false =
-            // from the right. Set per channel by the caller so an L/R pair is
-            // lit symmetrically.
-            property bool lightFromLeft: true
+            // Continuous horizontal light position: 0.32 = left source,
+            // 0.5 = centred source, 0.68 = right source.
+            property real lightSourceX: 0.5
             preferredRendererType: Shape.CurveRenderer
             antialiasing: true
 
-            // Light corner: top + the lit horizontal side.
-            readonly property real lightX: lightFromLeft ? 0.32 : 0.68
             readonly property real lightY: 0.28
-            // Convex keeps the highlight at the light corner; concave flips it
-            // to the opposite corner (mirror through center).
-            readonly property real litX: inverted ? lightX : (1.0 - lightX)
+            // Convex keeps the highlight at the light position; concave flips
+            // it through the centre onto the opposite slope.
+            readonly property real litX: inverted ? lightSourceX : (1.0 - lightSourceX)
             readonly property real litY: inverted ? lightY : (1.0 - lightY)
 
             ShapePath {
@@ -359,7 +404,9 @@ PlasmoidItem {
         Item {
             id: screw
             property real size: 10
-            property bool lightFromLeft: true
+            property real lightSourceX: 0.5
+            readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
+                (0.5 - lightSourceX) / 0.18))
             width: size
             height: size
 
@@ -370,7 +417,7 @@ PlasmoidItem {
                 radius: width / 2
                 color: "#000000"
                 opacity: 0.35
-                x: screw.lightFromLeft ? parent.width * 0.12 : -parent.width * 0.12
+                x: screw.lightBias * parent.width * 0.12
                 y: parent.height * 0.14
             }
 
@@ -389,7 +436,7 @@ PlasmoidItem {
                     radius: width / 2
                     color: "#8a8a8e"
                     opacity: 0.55
-                    x: screw.lightFromLeft ? parent.width * 0.12 : parent.width * 0.38
+                    x: parent.width * (0.25 - screw.lightBias * 0.13)
                     y: parent.height * 0.12
                 }
 
@@ -421,9 +468,15 @@ PlasmoidItem {
     fullRepresentation: Item {
         id: fullRep
 
-        readonly property real aspect: root.originalWidth / root.originalHeight  // 300/800
-        // Desired size from config; width derived from the fixed aspect ratio.
-        readonly property int cfgHeight: Plasmoid.configuration.speakerHeight
+        // L/R speakers remain tall; Subwoofer uses a near-square enclosure.
+        readonly property real aspect: root.isSubwoofer
+                                       ? 1.0
+                                       : root.originalWidth / root.originalHeight
+        // L/R share one height; Subwoofer has an independent square size whose
+        // default is half the stereo speaker height.
+        readonly property int cfgHeight: root.isSubwoofer
+                                         ? Plasmoid.configuration.subwooferHeight
+                                         : Plasmoid.configuration.speakerHeight
         readonly property int cfgWidth: Math.round(cfgHeight * aspect)
 
         implicitWidth: cfgWidth
@@ -437,7 +490,7 @@ PlasmoidItem {
         // The configured size is both a geometry request to Plasma and a hard
         // cap on fitBox below. Plasma may retain an applet's previously larger
         // allocation, so the visual cap is what makes decreases deterministic.
-        // Manual desktop resizes still update speakerHeight after settling.
+        // Manual desktop resizes update the active channel's size after settling.
         property bool suppressWriteBack: false
 
         onCfgHeightChanged: {
@@ -457,7 +510,10 @@ PlasmoidItem {
             if (suppressWriteBack) return
             var h = Math.round(height)
             if (h > 0 && Math.abs(h - cfgHeight) > 2) {
-                Plasmoid.configuration.speakerHeight = h
+                if (root.isSubwoofer)
+                    Plasmoid.configuration.subwooferHeight = h
+                else
+                    Plasmoid.configuration.speakerHeight = h
             }
         }
 
@@ -477,15 +533,19 @@ PlasmoidItem {
             onTriggered: fullRep.pushSizeToConfig()
         }
 
-        // Channel badge letter: L / R
-        readonly property string channelLabel: root.channel === 0 ? "L" : "R"
+        // Channel badge letter and accessible full name.
+        readonly property string channelLabel: ["L", "R", "S"][root.channel]
+        readonly property string channelName: [i18n("Left"), i18n("Right"), i18n("Subwoofer")][root.channel]
 
-        // Preserve 300:800 and center the speaker. The available applet area
-        // limits growth, while cfgHeight limits config-driven shrink even when
-        // Plasma keeps a larger allocation around the applet.
+        // Preserve 300:800 for L/R and 1:1 for Subwoofer. The available
+        // applet area limits growth, while cfgHeight caps config-driven shrink.
+        // Plasma owns the outer resize geometry and does not reliably enforce
+        // an applet aspect ratio, so keep any excess space above the speaker
+        // by pinning the fitted drawing to the bottom centre.
         Item {
             id: fitBox
-            anchors.centerIn: parent
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
             readonly property real parentAspect: parent.width / parent.height
             readonly property real availableHeight: parentAspect > fullRep.aspect
                                                     ? parent.height
@@ -511,8 +571,8 @@ PlasmoidItem {
                               ? Qt.resolvedUrl("MahoganySkin.qml")
                               : Qt.resolvedUrl("CherryWoodSkin.qml")
                     onLoaded: {
-                        item.lightFromLeft = Qt.binding(function() {
-                            return root.lightFromLeft
+                        item.lightSourceX = Qt.binding(function() {
+                            return root.lightSourceX
                         })
                     }
                 }
@@ -520,14 +580,24 @@ PlasmoidItem {
                 Column {
                 id: driverColumn
                 anchors.centerIn: parent
-                width: parent.width * 0.85
-                height: parent.height * 0.9
-                spacing: parent.height * 0.03
-                // Midrange's original absolute screw size: 65% × 9%.
-                readonly property real mountingScrewSize: width * 0.0585
+                width: parent.width * (root.isSubwoofer ? 0.96 : 0.85)
+                height: parent.height * (root.isSubwoofer ? 0.95 : 0.9)
+                spacing: parent.height * (root.isSubwoofer ? 0.015 : 0.03)
+                // Keep screw heads visually consistent despite the wider box.
+                readonly property real mountingScrewSize: width
+                    * (root.isSubwoofer ? 0.035 : 0.0585)
+
+                // Spacer keeps the single subwoofer driver centred vertically.
+                Item {
+                    id: subwooferTopSpacer
+                    visible: root.isSubwoofer
+                    width: 1
+                    height: parent.height * 0.015
+                }
 
                 // --- 1. TWEETER (Highs) ---
                 Item {
+                    visible: !root.isSubwoofer
                     width: parent.width * 0.45
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -552,7 +622,7 @@ PlasmoidItem {
                             y: (index < 2) ? inset : parent.height - sz - inset
                             onLoaded: {
                                 item.size = sz
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                             }
                         }
                     }
@@ -575,7 +645,7 @@ PlasmoidItem {
                             sourceComponent: shadowConeComponent
                             onLoaded: {
                                 item.inverted = true
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                 item.level = Qt.binding(function() { return root.audioLevels[0] })
                             }
                         }
@@ -595,7 +665,7 @@ PlasmoidItem {
                             anchors.fill: parent
                             sourceComponent: shadowConeComponent
                             onLoaded: {
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                 item.level = Qt.binding(function() { return root.audioLevels[0] })
                             }
                         }
@@ -612,7 +682,7 @@ PlasmoidItem {
                                 sourceComponent: shadowConeComponent
                                 onLoaded: {
                                     item.inverted = true
-                                    item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                    item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                     item.level = Qt.binding(function() { return root.audioLevels[0] })
                                 }
                             }
@@ -622,6 +692,7 @@ PlasmoidItem {
 
                 // --- 2. MIDRANGE (Mids) ---
                 Item {
+                    visible: !root.isSubwoofer
                     width: parent.width * 0.65
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -646,7 +717,7 @@ PlasmoidItem {
                             y: (index < 2) ? inset : parent.height - sz - inset
                             onLoaded: {
                                 item.size = sz
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                             }
                         }
                     }
@@ -666,7 +737,7 @@ PlasmoidItem {
                             sourceComponent: shadowConeComponent
                             onLoaded: {
                                 item.inverted = true
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                 item.level = Qt.binding(function() { return root.audioLevels[1] })
                             }
                         }
@@ -686,7 +757,7 @@ PlasmoidItem {
                             anchors.fill: parent
                             sourceComponent: shadowConeComponent
                             onLoaded: {
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                 item.level = Qt.binding(function() { return root.audioLevels[1] })
                             }
                         }
@@ -703,7 +774,7 @@ PlasmoidItem {
                                 sourceComponent: shadowConeComponent
                                 onLoaded: {
                                     item.inverted = true
-                                    item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                    item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                     item.level = Qt.binding(function() { return root.audioLevels[1] })
                                 }
                             }
@@ -713,6 +784,7 @@ PlasmoidItem {
 
                 // --- 3. WOOFER (Bass) ---
                 Item {
+                    visible: !root.isSubwoofer
                     width: parent.width * 0.95
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -737,7 +809,7 @@ PlasmoidItem {
                             y: (index < 2) ? inset : parent.height - sz - inset
                             onLoaded: {
                                 item.size = sz
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                             }
                         }
                     }
@@ -757,7 +829,7 @@ PlasmoidItem {
                             sourceComponent: shadowConeComponent
                             onLoaded: {
                                 item.inverted = true
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                 item.level = Qt.binding(function() { return root.audioLevels[2] })
                             }
                         }
@@ -777,7 +849,7 @@ PlasmoidItem {
                             anchors.fill: parent
                             sourceComponent: shadowConeComponent
                             onLoaded: {
-                                item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                 item.level = Qt.binding(function() { return root.audioLevels[2] })
                             }
                         }
@@ -796,7 +868,102 @@ PlasmoidItem {
                                 sourceComponent: shadowConeComponent
                                 onLoaded: {
                                     item.inverted = true
-                                    item.lightFromLeft = Qt.binding(function() { return root.lightFromLeft })
+                                    item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
+                                    item.level = Qt.binding(function() { return root.audioLevels[2] })
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+
+                // --- SUBWOOFER: one oversized driver fed by both channels ---
+                Item {
+                    id: subwooferDriver
+                    visible: root.isSubwoofer
+                    width: parent.width * 0.74
+                    height: width
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#303030"
+                        border.color: "#5e5e5e"
+                        border.width: 4
+                        radius: 12
+                    }
+
+                    Repeater {
+                        model: 4
+                        Loader {
+                            sourceComponent: screwComponent
+                            readonly property real sz: driverColumn.mountingScrewSize
+                            readonly property real inset: parent.width * 0.065
+                            width: sz; height: sz
+                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
+                            y: (index < 2) ? inset : parent.height - sz - inset
+                            onLoaded: {
+                                item.size = sz
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.91
+                        height: width
+                        radius: width / 2
+                        color: "#1d1d1d"
+                        border.color: "#323232"
+                        border.width: 2
+
+                        Loader {
+                            anchors.fill: parent
+                            sourceComponent: shadowConeComponent
+                            onLoaded: {
+                                item.inverted = true
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
+                                item.level = Qt.binding(function() { return root.audioLevels[2] })
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.84
+                        height: width
+                        radius: width / 2
+                        color: "#2e2e2e"
+                        border.color: "#666666"
+                        border.width: 7
+                        scale: 1.0 + root.vibe[2] * 0.04
+
+                        Loader {
+                            anchors.fill: parent
+                            sourceComponent: shadowConeComponent
+                            onLoaded: {
+                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
+                                item.level = Qt.binding(function() { return root.audioLevels[2] })
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width * 0.5
+                            height: width
+                            radius: width / 2
+                            color: "#050807"
+                            border.color: "#11221f"
+                            border.width: 2
+
+                            Loader {
+                                anchors.fill: parent
+                                sourceComponent: shadowConeComponent
+                                onLoaded: {
+                                    item.inverted = true
+                                    item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                                     item.level = Qt.binding(function() { return root.audioLevels[2] })
                                 }
                             }
@@ -806,8 +973,9 @@ PlasmoidItem {
 
                 // --- 4. BRAND LOGO, CHANNEL BADGE & BASS PORT ---
                 Item {
+                    id: footerControls
                     width: parent.width
-                    height: parent.height * 0.12
+                    height: parent.height * (root.isSubwoofer ? 0.17 : 0.12)
 
                     Text {
                         text: "Technics"
@@ -822,27 +990,21 @@ PlasmoidItem {
                         y: (-driverColumn.spacing + bassPort.y - height) / 2
                     }
 
-                    // Channel indicator badge (L / R / M) — click to cycle
-                    // channel. Side follows the selection: L hugs the left,
-                    // R the right, M sits centered.
+                    // Passive channel indicator for stereo speakers. Channel
+                    // selection is handled exclusively by the configuration menu.
                     Rectangle {
                         id: channelBadge
-                        // Badge size derived from cabinet height (kept in one
-                        // place so the x math below can reuse the expression
-                        // instead of the possibly-stale `width` property).
+                        visible: !root.isSubwoofer
                         readonly property real badgeSize: parent.height * 0.34
                         width: badgeSize
                         height: badgeSize
                         radius: 4
-                        color: badgeMouse.containsMouse ? "#153029" : "#0d0c0b"
+                        color: "#0d0c0b"
                         border.color: "#00a887"
                         border.width: 2
                         anchors.verticalCenter: bassPort.verticalCenter
 
-                        // Slide to the channel's side. The Right position uses
-                        // `badgeSize` (not `width`) so it recomputes in lockstep
-                        // with the badge size during an aspect resize — using
-                        // `width` here raced the resize pass and drifted.
+                        // Keep Left on the left and Right on the right.
                         x: root.channel === 0
                              ? parent.width * 0.05
                              : parent.width - badgeSize - parent.width * 0.05
@@ -856,26 +1018,17 @@ PlasmoidItem {
                             font.family: "Sans"
                             color: "#00d9ae"
                         }
-
-                        MouseArea {
-                            id: badgeMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            // Cycle Left <-> Right and persist.
-                            onClicked: {
-                                Plasmoid.configuration.channel = (root.channel + 1) % 2
-                            }
-                        }
                     }
 
-                    // Bass reflex port — about one fifth of the woofer
-                    // diameter, lowered into the cabinet margin to clear the logo.
+                    // Bass reflex port — circular for L/R, and a wider,
+                    // heavily rounded horizontal vent for the subwoofer.
                     Rectangle {
                         id: bassPort
-                        width: parent.height * 0.70
-                        height: width
-                        radius: width / 2
+                        width: root.isSubwoofer
+                               ? parent.width * 0.74
+                               : parent.height * 0.70
+                        height: root.isSubwoofer ? parent.width * 0.084 : width
+                        radius: root.isSubwoofer ? height / 2 : width / 2
                         color: "#000000"
                         border.color: "#1a1a1a"
                         border.width: 3
@@ -883,6 +1036,18 @@ PlasmoidItem {
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: -parent.height * 0.12
                     }
+                }
+
+                // Fill the remainder only in subwoofer mode so the Column keeps
+                // the driver/footer group vertically balanced like the 3-way layout.
+                Item {
+                    visible: root.isSubwoofer
+                    width: 1
+                    height: Math.max(0, parent.height
+                        - subwooferTopSpacer.height
+                        - subwooferDriver.height
+                        - footerControls.height
+                        - parent.spacing * 3)
                 }
             }
         }
