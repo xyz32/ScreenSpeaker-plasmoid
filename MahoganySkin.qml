@@ -4,12 +4,11 @@ import QtQuick
 Item {
     id: root
 
-    property real lightSourceX: 0.5
     property bool isSubwoofer: false
+    property real lightSourceX: 0.5
     readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
         (0.5 - lightSourceX) / 0.18))
-    readonly property real footHeightRatio: isSubwoofer ? 0.044 : 0.022
-    readonly property real bodyHeight: height * (1.0 - footHeightRatio)
+    readonly property real bodyHeight: height * 0.978
 
     Rectangle {
         id: body
@@ -75,13 +74,14 @@ Item {
     Repeater {
         model: 2
         Item {
-            // Default subwoofer feet match the stereo feet in absolute size.
+            // Subwoofer defaults to half the stereo height, so doubled ratios
+            // keep its feet the same absolute size as the L/R cabinet feet.
             width: root.height * (root.isSubwoofer ? 0.12 : 0.06)
-            height: root.height * root.footHeightRatio
+            height: root.height * (root.isSubwoofer ? 0.044 : 0.022)
             x: index === 0
                ? root.width * 0.12
                : root.width - width - root.width * 0.12
-            y: root.bodyHeight
+            y: root.bodyHeight - 0.5
 
             // Match the tapered foot silhouette and cast away from the light.
             Canvas {

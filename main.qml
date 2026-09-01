@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Shapes
@@ -56,17 +57,12 @@ PlasmoidItem {
     property var audioLevels: [0.0, 0.0, 0.0]
     property var audioActivity: [0.0, 0.0, 0.0]
 
-    // Positional wire-format contract with speaker-daemon.py.
-    readonly property int stereoPayloadSize: 12
-    readonly property int ultraEnergyOffset: 12
-    readonly property int ultraActivityOffset: 14
-
     readonly property real originalWidth: 300
     readonly property real originalHeight: 800
 
     // Shared-daemon state. All instances use a FIXED data path (no PID suffix)
     // so the first instance launches the daemon and the rest discover the same
-    // one via its singleton lock. One pw-record stream + FFT serves every speaker.
+    // one via its singleton lock. One parec + one FFT serves every speaker.
     property string runtimeDir: ""
     property string dataPath: ""
     property string alivePath: ""
@@ -100,7 +96,7 @@ PlasmoidItem {
         }
     }
 
-    // --- HTTP polling (~60fps, in-process, no subprocess overhead) ---
+    // --- HTTP polling (30fps, in-process, no subprocess overhead) ---
     property var pollXhr: null
 
     function pollOnce() {
@@ -123,17 +119,17 @@ PlasmoidItem {
             // by dedicated 20-80 Hz stereo energy/activity values:
             //   ... Le_ultra Re_ultra La_ultra Ra_ultra
             var parts = txt.split(/\s+/)
-            if (parts.length < root.stereoPayloadSize) return
+            if (parts.length < 12) return
 
             var eBass, eMid, eHigh, aBass, aMid, aHigh
             if (root.isSubwoofer) {
                 // React only to dedicated 20-80 Hz energy. max() preserves
                 // hard-panned ultra-low bass without summing above 1.0. A zero
                 // fallback keeps Subwoofer mode silent with an old 12-value daemon.
-                eBass = Math.max(parseFloat(parts[root.ultraEnergyOffset]) || 0,
-                                 parseFloat(parts[root.ultraEnergyOffset + 1]) || 0)
-                aBass = Math.max(parseFloat(parts[root.ultraActivityOffset]) || 0,
-                                 parseFloat(parts[root.ultraActivityOffset + 1]) || 0)
+                eBass = Math.max(parseFloat(parts[12]) || 0,
+                                 parseFloat(parts[13]) || 0)
+                aBass = Math.max(parseFloat(parts[14]) || 0,
+                                 parseFloat(parts[15]) || 0)
                 eMid = 0; eHigh = 0
                 aMid = 0; aHigh = 0
             } else {
@@ -472,12 +468,12 @@ PlasmoidItem {
     fullRepresentation: Item {
         id: fullRep
 
-        // L/R speakers remain tall; Subwoofer uses a near-square enclosure.
+        // L/R speakers remain tall; Subwoofer uses a balanced vertical rectangle.
         readonly property real aspect: root.isSubwoofer
-                                       ? 1.0
+                                       ? 0.82
                                        : root.originalWidth / root.originalHeight
-        // L/R share one height; Subwoofer has an independent square size whose
-        // default is half the stereo speaker height.
+        // L/R share one height; Subwoofer has an independent rectangular size
+        // whose default height is half the stereo speaker height.
         readonly property int cfgHeight: root.isSubwoofer
                                          ? Plasmoid.configuration.subwooferHeight
                                          : Plasmoid.configuration.speakerHeight
@@ -537,10 +533,11 @@ PlasmoidItem {
             onTriggered: fullRep.pushSizeToConfig()
         }
 
-        // Passive channel badge letter for L/R speakers.
-        readonly property string channelLabel: root.channel === 0 ? "L" : "R"
+        // Channel badge letter and accessible full name.
+        readonly property string channelLabel: ["L", "R", "S"][root.channel]
+        readonly property string channelName: [i18n("Left"), i18n("Right"), i18n("Subwoofer")][root.channel]
 
-        // Preserve 300:800 for L/R and 1:1 for Subwoofer. The available
+        // Preserve 300:800 for L/R and 0.82:1 for Subwoofer. The available
         // applet area limits growth, while cfgHeight caps config-driven shrink.
         // Plasma owns the outer resize geometry and does not reliably enforce
         // an applet aspect ratio, so keep any excess space above the speaker
@@ -562,11 +559,7 @@ PlasmoidItem {
                 id: cabinet
                 anchors.top: parent.top
                 width: parent.width
-                // Keep the drivers inside the cabinet body rather than inside
-                // the foot area. Every skin exposes the same bodyHeight contract.
-                height: skinLoader.item
-                        ? skinLoader.item.bodyHeight
-                        : parent.height * (root.isSubwoofer ? 0.956 : 0.978)
+                height: parent.height * 0.978
 
                 Loader {
                     id: skinLoader
@@ -578,32 +571,23 @@ PlasmoidItem {
                               ? Qt.resolvedUrl("MahoganySkin.qml")
                               : Qt.resolvedUrl("CherryWoodSkin.qml")
                     onLoaded: {
-                        item.lightSourceX = Qt.binding(function() {
-                            return root.lightSourceX
-                        })
                         item.isSubwoofer = Qt.binding(function() {
                             return root.isSubwoofer
+                        })
+                        item.lightSourceX = Qt.binding(function() {
+                            return root.lightSourceX
                         })
                     }
                 }
 
                 Column {
                 id: driverColumn
+                visible: !root.isSubwoofer
                 anchors.centerIn: parent
-                width: parent.width * (root.isSubwoofer ? 0.96 : 0.85)
-                height: parent.height * (root.isSubwoofer ? 0.95 : 0.9)
-                spacing: parent.height * (root.isSubwoofer ? 0.015 : 0.03)
-                // Keep screw heads visually consistent despite the wider box.
-                readonly property real mountingScrewSize: width
-                    * (root.isSubwoofer ? 0.035 : 0.0585)
-
-                // Spacer keeps the single subwoofer driver centred vertically.
-                Item {
-                    id: subwooferTopSpacer
-                    visible: root.isSubwoofer
-                    width: 1
-                    height: parent.height * 0.015
-                }
+                width: parent.width * 0.85
+                height: parent.height * 0.9
+                spacing: parent.height * 0.03
+                readonly property real mountingScrewSize: width * 0.0585
 
                 // --- 1. TWEETER (Highs) ---
                 Item {
@@ -887,108 +871,13 @@ PlasmoidItem {
                 }
 
 
-
-                // --- SUBWOOFER: one oversized driver fed by both channels ---
-                Item {
-                    id: subwooferDriver
-                    visible: root.isSubwoofer
-                    width: parent.width * 0.74
-                    height: width
-                    anchors.horizontalCenter: parent.horizontalCenter
-
-                    Rectangle {
-                        anchors.fill: parent
-                        color: "#303030"
-                        border.color: "#5e5e5e"
-                        border.width: 4
-                        radius: 12
-                    }
-
-                    Repeater {
-                        model: 4
-                        Loader {
-                            sourceComponent: screwComponent
-                            readonly property real sz: driverColumn.mountingScrewSize
-                            readonly property real inset: parent.width * 0.065
-                            width: sz; height: sz
-                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
-                            y: (index < 2) ? inset : parent.height - sz - inset
-                            onLoaded: {
-                                item.size = sz
-                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: parent.width * 0.91
-                        height: width
-                        radius: width / 2
-                        color: "#1d1d1d"
-                        border.color: "#323232"
-                        border.width: 2
-
-                        Loader {
-                            anchors.fill: parent
-                            sourceComponent: shadowConeComponent
-                            onLoaded: {
-                                item.inverted = true
-                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
-                                item.level = Qt.binding(function() { return root.audioLevels[2] })
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: parent.width * 0.84
-                        height: width
-                        radius: width / 2
-                        color: "#2e2e2e"
-                        border.color: "#666666"
-                        border.width: 7
-                        scale: 1.0 + root.vibe[2] * 0.04
-
-                        Loader {
-                            anchors.fill: parent
-                            sourceComponent: shadowConeComponent
-                            onLoaded: {
-                                item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
-                                item.level = Qt.binding(function() { return root.audioLevels[2] })
-                            }
-                        }
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: parent.width * 0.5
-                            height: width
-                            radius: width / 2
-                            color: "#050807"
-                            border.color: "#11221f"
-                            border.width: 2
-
-                            Loader {
-                                anchors.fill: parent
-                                sourceComponent: shadowConeComponent
-                                onLoaded: {
-                                    item.inverted = true
-                                    item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
-                                    item.level = Qt.binding(function() { return root.audioLevels[2] })
-                                }
-                            }
-                        }
-                    }
-                }
-
                 // --- 4. BRAND LOGO, CHANNEL BADGE & BASS PORT ---
                 Item {
                     id: footerControls
                     width: parent.width
-                    height: parent.height * (root.isSubwoofer ? 0.17 : 0.12)
+                    height: parent.height * 0.12
 
                     Text {
-                        id: brandLogo
                         text: "Technics"
                         font.bold: true
                         font.pixelSize: parent.height * 0.35
@@ -1005,7 +894,6 @@ PlasmoidItem {
                     // selection is handled exclusively by the configuration menu.
                     Rectangle {
                         id: channelBadge
-                        visible: !root.isSubwoofer
                         readonly property real badgeSize: parent.height * 0.34
                         width: badgeSize
                         height: badgeSize
@@ -1031,44 +919,168 @@ PlasmoidItem {
                         }
                     }
 
-                    // Bass reflex port — circular for L/R, and a wide, thin,
-                    // heavily rounded horizontal vent for the subwoofer.
+                    // Circular bass reflex port for L/R speakers.
                     Rectangle {
                         id: bassPort
-                        readonly property real bottomInset: root.isSubwoofer
-                            ? parent.height * 0.03
-                            : -parent.height * 0.12
-                        readonly property real desiredSubwooferHeight: parent.width * 0.07
-                        readonly property real maximumSubwooferHeight: Math.max(1,
-                            parent.height - bottomInset
-                            - brandLogo.implicitHeight - driverColumn.spacing)
-                        width: root.isSubwoofer
-                               ? parent.width * 0.74
-                               : parent.height * 0.70
-                        height: root.isSubwoofer
-                                ? Math.min(desiredSubwooferHeight,
-                                           maximumSubwooferHeight)
-                                : width
-                        radius: root.isSubwoofer ? height / 2 : width / 2
+                        width: parent.height * 0.70
+                        height: width
+                        radius: width / 2
                         color: "#000000"
                         border.color: "#1a1a1a"
                         border.width: 3
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: bottomInset
+                        anchors.bottomMargin: -parent.height * 0.12
                     }
                 }
 
-                // Fill the remainder only in subwoofer mode so the Column keeps
-                // the driver/footer group vertically balanced like the 3-way layout.
+            }
+
+            // Balanced subwoofer layout. One reference margin controls the
+            // driver top/side clearances and the vent's bottom clearance.
+            Item {
+                id: subwooferLayout
+                visible: root.isSubwoofer
+                anchors.fill: parent
+                readonly property real referenceMargin: width * 0.06
+                readonly property real driverSize: width - referenceMargin * 2
+                readonly property real mountingScrewSize: driverSize * 0.05
+                readonly property real lowerGapTop: subwooferDriver.y + subwooferDriver.height
+                readonly property real lowerGapBottom: subwooferVent.y
+                readonly property real lowerGapHeight: Math.max(0,
+                    lowerGapBottom - lowerGapTop)
+
+                // One oversized driver fed by the true L+R subwoofer signal.
                 Item {
-                    visible: root.isSubwoofer
-                    width: 1
-                    height: Math.max(0, parent.height
-                        - subwooferTopSpacer.height
-                        - subwooferDriver.height
-                        - footerControls.height
-                        - parent.spacing * 3)
+                    id: subwooferDriver
+                    anchors.top: parent.top
+                    anchors.topMargin: subwooferLayout.referenceMargin
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: subwooferLayout.driverSize
+                    height: width
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#303030"
+                        border.color: "#5e5e5e"
+                        border.width: 4
+                        radius: 12
+                    }
+
+                    Repeater {
+                        model: 4
+                        Loader {
+                            sourceComponent: screwComponent
+                            readonly property real sz: subwooferLayout.mountingScrewSize
+                            readonly property real inset: parent.width * 0.065
+                            width: sz; height: sz
+                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
+                            y: (index < 2) ? inset : parent.height - sz - inset
+                            onLoaded: {
+                                item.size = sz
+                                item.lightSourceX = Qt.binding(function() {
+                                    return root.lightSourceX
+                                })
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.91
+                        height: width
+                        radius: width / 2
+                        color: "#1d1d1d"
+                        border.color: "#323232"
+                        border.width: 2
+
+                        Loader {
+                            anchors.fill: parent
+                            sourceComponent: shadowConeComponent
+                            onLoaded: {
+                                item.inverted = true
+                                item.lightSourceX = Qt.binding(function() {
+                                    return root.lightSourceX
+                                })
+                                item.level = Qt.binding(function() {
+                                    return root.audioLevels[2]
+                                })
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.84
+                        height: width
+                        radius: width / 2
+                        color: "#2e2e2e"
+                        border.color: "#666666"
+                        border.width: 7
+                        scale: 1.0 + root.vibe[2] * 0.04
+
+                        Loader {
+                            anchors.fill: parent
+                            sourceComponent: shadowConeComponent
+                            onLoaded: {
+                                item.lightSourceX = Qt.binding(function() {
+                                    return root.lightSourceX
+                                })
+                                item.level = Qt.binding(function() {
+                                    return root.audioLevels[2]
+                                })
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width * 0.5
+                            height: width
+                            radius: width / 2
+                            color: "#050807"
+                            border.color: "#11221f"
+                            border.width: 2
+
+                            Loader {
+                                anchors.fill: parent
+                                sourceComponent: shadowConeComponent
+                                onLoaded: {
+                                    item.inverted = true
+                                    item.lightSourceX = Qt.binding(function() {
+                                        return root.lightSourceX
+                                    })
+                                    item.level = Qt.binding(function() {
+                                        return root.audioLevels[2]
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Technics"
+                    font.bold: true
+                    font.family: "Serif"
+                    font.pixelSize: Math.min(subwooferLayout.driverSize * 0.065,
+                        subwooferLayout.lowerGapHeight * 0.58)
+                    color: "#e6d7b8"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: subwooferLayout.lowerGapTop
+                       + (subwooferLayout.lowerGapHeight - height) / 2
+                }
+
+                Rectangle {
+                    id: subwooferVent
+                    width: subwooferLayout.driverSize * 0.78
+                    height: subwooferLayout.driverSize * 0.085
+                    radius: height / 2
+                    color: "#000000"
+                    border.color: "#1a1a1a"
+                    border.width: 3
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: subwooferLayout.referenceMargin
                 }
             }
         }
