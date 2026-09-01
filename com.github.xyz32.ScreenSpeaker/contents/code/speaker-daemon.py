@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Speaker plasmoid audio daemon.
 
-Captures STEREO audio from a PulseAudio/PipeWire sink monitor via `pw-record`
+Captures audio from a PulseAudio/PipeWire sink monitor via `pw-record`
 (marked as a sink-monitor capture so KDE shows no microphone indicator),
 computes an FFT per channel, condenses into 3 logarithmic bands (bass, mid, treble)
 plus a dedicated ultra-low band (20-80 Hz), and serves the latest snapshot over
-localhost HTTP for the QML widget to poll.
+localhost HTTP for the QML widget to poll. When the sink exposes a 2.1 channel
+map, its real LFE channel is captured and processed separately.
 
-Output format: the original 12 values followed by four ultra-low values:
+Output format: the original 12 values followed by four stereo ultra-low values
+and, when available, two LFE values:
   'Le_bass Le_mid Le_treble Re_bass Re_mid Re_treble
    La_bass La_mid La_treble Ra_bass Ra_mid Ra_treble
-   Le_ultra Re_ultra La_ultra Ra_ultra'
+   Le_ultra Re_ultra La_ultra Ra_ultra [LFEe_ultra LFEa_ultra]'
 energy drives vibration amplitude; activity (fraction of active bins) drives
 vibration rate.
 
@@ -21,6 +23,7 @@ Exits when heartbeat file (`<output>.alive`) is older than 30s.
 import argparse
 import fcntl
 import http.server
+import json
 import os
 import signal
 import subprocess
@@ -151,6 +154,33 @@ def build_ultra_low_indices(freqs, fmin=20.0, fmax=80.0):
     return lo, min(hi, len(freqs))
 
 
+def sink_has_lfe(device):
+    """Return whether the monitor's backing sink exposes a real LFE channel."""
+    sink_name = device[:-8] if device.endswith(".monitor") else device
+    try:
+        result = subprocess.run(
+            ["pactl", "-f", "json", "list", "sinks"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=2.0,
+        )
+        for sink in json.loads(result.stdout):
+            if sink.get("name") != sink_name:
+                continue
+            channel_map = sink.get("channel_map", "")
+            if isinstance(channel_map, str):
+                channels = channel_map.split(",")
+            else:
+                channels = channel_map
+            return any(str(channel).strip().lower() == "lfe"
+                       for channel in channels)
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        pass
+    return False
+
+
 def main():
     args = parse_args()
     if args.daemonize:
@@ -164,8 +194,10 @@ def main():
 
     chunk = max(256, 1 << (args.chunk - 1).bit_length())
     fft_size = max(chunk, 1 << (args.fft_size - 1).bit_length())
-    # Stereo interleaved float32: L R L R ... -> chunk frames * 2 channels * 4 bytes
-    bytes_per_frame = chunk * 2 * 4
+    capture_lfe = sink_has_lfe(args.device)
+    capture_channels = 3 if capture_lfe else 2
+    channel_map = "FL,FR,LFE" if capture_lfe else "FL,FR"
+    bytes_per_chunk = chunk * capture_channels * 4
 
     # Capture the sink's monitor with pw-record (PipeWire-native). Using
     # `stream.capture.sink=true` links to the playback sink's monitor rather
@@ -175,8 +207,8 @@ def main():
     # node from Plasma's indicator (every real capture registers as
     # Stream/Input/Audio, which the indicator is designed to show). The
     # node.name / node.description below at least label it clearly as this app
-    # in the tray's recording list. Output is raw interleaved float32 stereo,
-    # which the deinterleave/FFT logic below consumes directly.
+    # in the tray's recording list. Raw output is explicitly mapped as FL,FR
+    # or FL,FR,LFE so the deinterleave logic consumes deterministic positions.
     cmd = [
         "stdbuf", "-o0",
         "pw-record",
@@ -185,11 +217,13 @@ def main():
                " node.name=speaker-visualizer"
                " node.description=\"Speaker Visualizer\" }"),
         "--rate", str(args.rate),
-        "--channels", "2",
+        "--channels", str(capture_channels),
+        "--channel-map", channel_map,
         "--format", "f32",
         "--raw",
         "-",
     ]
+    print(f"[speaker-daemon] capture map={channel_map}", flush=True)
 
     _httpd, http_port, port_path = start_http_server(args.output)
     print(f"[speaker-daemon] http on 127.0.0.1:{http_port}", flush=True)
@@ -218,12 +252,14 @@ def main():
     bands = build_band_indices(freqs)
     ultra_low = build_ultra_low_indices(freqs)
 
-    # Per-channel sliding-window ring buffers and smoothing state. The fourth
-    # smoothing slot belongs to the independent 20-80 Hz subwoofer band.
+    # Sliding-window ring buffers and smoothing state. The fourth smoothing
+    # slot belongs to the independent 20-80 Hz subwoofer band.
     ring_l = np.zeros(fft_size, dtype=np.float32)
     ring_r = np.zeros(fft_size, dtype=np.float32)
+    ring_lfe = np.zeros(fft_size, dtype=np.float32)
     smooth_l = np.zeros(4, dtype=np.float32)
     smooth_r = np.zeros(4, dtype=np.float32)
+    smooth_lfe = np.zeros(4, dtype=np.float32)
 
     decay = float(np.clip(args.smoothing, 0.0, 0.98))
     sens = float(max(0.05, args.sensitivity))
@@ -294,16 +330,16 @@ def main():
         last_alive_check = time.monotonic()
 
         while True:
-            raw = proc.stdout.read(bytes_per_frame)
-            if not raw or len(raw) < bytes_per_frame:
+            raw = proc.stdout.read(bytes_per_chunk)
+            if not raw or len(raw) < bytes_per_chunk:
                 break
 
             interleaved = np.frombuffer(raw, dtype=np.float32)
-            if interleaved.size != chunk * 2:
+            if interleaved.size != chunk * capture_channels:
                 continue
-            # Deinterleave: even indices = left, odd = right
-            left = interleaved[0::2]
-            right = interleaved[1::2]
+            frames = interleaved.reshape(chunk, capture_channels)
+            left = frames[:, 0]
+            right = frames[:, 1]
 
             ring_l[:-chunk] = ring_l[chunk:]
             ring_l[-chunk:] = left
@@ -313,13 +349,24 @@ def main():
             sl, al, ul, aul = process_channel(ring_l, smooth_l)
             sr, ar, ur, aur = process_channel(ring_r, smooth_r)
 
-            # Preserve the original 12-value prefix and append ultra-low stereo
-            # energy/activity for Subwoofer mode.
+            lfe_ultra = None
+            lfe_activity = None
+            if capture_lfe:
+                ring_lfe[:-chunk] = ring_lfe[chunk:]
+                ring_lfe[-chunk:] = frames[:, 2]
+                _, _, lfe_ultra, lfe_activity = process_channel(
+                    ring_lfe, smooth_lfe)
+
+            # Preserve the original 16-value stereo prefix. A real LFE channel,
+            # when present, is appended so newer QML can prefer it while older
+            # clients continue to consume the stereo ultra-low values.
             line = (f"{sl[0]:.3f} {sl[1]:.3f} {sl[2]:.3f} "
                     f"{sr[0]:.3f} {sr[1]:.3f} {sr[2]:.3f} "
                     f"{al[0]:.3f} {al[1]:.3f} {al[2]:.3f} "
                     f"{ar[0]:.3f} {ar[1]:.3f} {ar[2]:.3f} "
                     f"{ul:.3f} {ur:.3f} {aul:.3f} {aur:.3f}")
+            if capture_lfe:
+                line += f" {lfe_ultra:.3f} {lfe_activity:.3f}"
             with _state_lock:
                 _state["payload"] = line
 
@@ -338,8 +385,10 @@ def main():
         proc_holder["proc"] = None
         smooth_l[:] = 0
         smooth_r[:] = 0
+        smooth_lfe[:] = 0
         ring_l[:] = 0
         ring_r[:] = 0
+        ring_lfe[:] = 0
         with _state_lock:
             _state["payload"] = ""
         time.sleep(1.0)
