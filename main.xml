@@ -18,8 +18,8 @@
         <entry name="speakerHeight" type="Int">
             <default>500</default>
         </entry>
-        <!-- Square subwoofer size in pixels. The default is half the stereo
-             speaker height so a new subwoofer starts at 250x250. -->
+        <!-- Subwoofer height in pixels. Width follows the balanced 0.82:1
+             aspect ratio; the default height is half the stereo speaker height. -->
         <entry name="subwooferHeight" type="Int">
             <default>250</default>
         </entry>
