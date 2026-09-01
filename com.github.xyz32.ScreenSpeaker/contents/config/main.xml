@@ -4,7 +4,7 @@
       xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
     <kcfgfile name=""/>
     <group name="General">
-        <!-- 0 = Left, 1 = Right -->
+        <!-- 0 = Left, 1 = Right, 2 = Subwoofer -->
         <entry name="channel" type="Int">
             <default>0</default>
         </entry>
@@ -12,11 +12,16 @@
         <entry name="skin" type="Int">
             <default>0</default>
         </entry>
-        <!-- Speaker height in pixels. Width is derived from the fixed
-             300:800 aspect ratio. Set the same value on every instance to
-             keep a stereo pair matched. -->
+        <!-- Stereo speaker height in pixels. Width follows the 300:800 aspect
+             ratio. Set the same value on Left and Right instances to keep a
+             stereo pair matched. -->
         <entry name="speakerHeight" type="Int">
             <default>500</default>
+        </entry>
+        <!-- Square subwoofer size in pixels. The default is half the stereo
+             speaker height so a new subwoofer starts at 250x250. -->
+        <entry name="subwooferHeight" type="Int">
+            <default>250</default>
         </entry>
     </group>
 </kcfg>
