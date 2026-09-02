@@ -558,8 +558,10 @@ PlasmoidItem {
             Item {
                 id: cabinet
                 anchors.top: parent.top
+                readonly property real reservedFootHeight: fitBox.height
+                    * (root.isSubwoofer ? 0.044 : 0.022)
                 width: parent.width
-                height: parent.height * 0.978
+                height: parent.height - reservedFootHeight
 
                 Loader {
                     id: skinLoader
