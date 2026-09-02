@@ -4,10 +4,13 @@ import QtQuick
 Item {
     id: root
 
+    property bool isSubwoofer: false
     property real lightSourceX: 0.5
     readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
         (0.5 - lightSourceX) / 0.18))
-    readonly property real bodyHeight: height * 0.978
+    readonly property real footWidth: height * (isSubwoofer ? 0.12 : 0.06)
+    readonly property real footHeight: height * (isSubwoofer ? 0.044 : 0.022)
+    readonly property real bodyHeight: height - footHeight
 
     Rectangle {
         id: body
@@ -72,15 +75,14 @@ Item {
     Repeater {
         model: 2
         Item {
-            // The subwoofer defaults to half the stereo speaker height, so
-            // doubled ratios give both cabinets the same absolute foot size.
-            readonly property bool squareCabinet: root.width >= root.height * 0.8
-            width: root.height * (squareCabinet ? 0.12 : 0.06)
-            height: root.height * (squareCabinet ? 0.044 : 0.022)
+            // Subwoofer defaults to half the stereo height, so doubled ratios
+            // keep its feet the same absolute size as the L/R cabinet feet.
+            width: root.footWidth
+            height: root.footHeight
             x: index === 0
                ? root.width * 0.12
                : root.width - width - root.width * 0.12
-            y: root.bodyHeight - 0.5
+            y: root.bodyHeight
 
             Rectangle {
                 // Light from the left casts right; light from the right casts left.

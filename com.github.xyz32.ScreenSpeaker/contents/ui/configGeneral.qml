@@ -60,7 +60,7 @@ Kirigami.FormLayout {
     Label {
         Layout.preferredWidth: 420
         wrapMode: Text.WordWrap
-        text: i18n("Left and Right use a tall enclosure. Subwoofer uses a separate square size that defaults to half the stereo speaker height.")
+        text: i18n("Left and Right use a tall enclosure. Subwoofer uses a separate balanced rectangular size that defaults to half the stereo speaker height.")
         font.pixelSize: Kirigami.Theme.smallFont.pixelSize
         opacity: 0.75
     }
