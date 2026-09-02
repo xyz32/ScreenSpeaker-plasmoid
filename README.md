@@ -10,4 +10,4 @@ Plasmoid store: https://www.opendesktop.org/p/2369856/
  - For stereo speakers add 2 instances of the plasmoid and use the channel selction lindicator that shows up just next to the Techics logo.
  - To make the speakers the same size, use the size config.
 
-<img src="./Screenshot_Speaker_anim.gif" width="150" alt="App Demo">
+<img src="./Screenshot_Speaker_anim.gif" width="350" alt="App Demo">
