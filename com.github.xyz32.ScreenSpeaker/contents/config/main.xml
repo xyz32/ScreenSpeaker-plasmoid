@@ -12,6 +12,10 @@
         <entry name="skin" type="Int">
             <default>0</default>
         </entry>
+        <!-- Whether the black metal wire shroud covers the drivers. -->
+        <entry name="showGrille" type="Bool">
+            <default>true</default>
+        </entry>
         <!-- Stereo speaker height in pixels. Width follows the 300:800 aspect
              ratio. Set the same value on Left and Right instances to keep a
              stereo pair matched. -->
