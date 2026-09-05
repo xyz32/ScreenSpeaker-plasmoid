@@ -17,6 +17,7 @@ PlasmoidItem {
     readonly property int channel: Plasmoid.configuration.channel
     readonly property int skin: Plasmoid.configuration.skin
     readonly property bool isSubwoofer: root.channel === 2
+    readonly property bool showGrille: Plasmoid.configuration.showGrille
 
     // Continuous room-light position across the speaker face. 0.32 and 0.68
     // preserve the accepted left/right shading at a screen edge; 0.5 is a
@@ -411,6 +412,189 @@ PlasmoidItem {
             }
 
             Behavior on level { NumberAnimation { duration: 60; easing.type: Easing.OutQuad } }
+        }
+    }
+
+    // Backing-free black-metal shroud. Permanent recessed mounting holes are
+    // painted first, then the removable wire lattice and rounded frame sit over
+    // them. Only strokes and narrow rails contain pixels between the drivers.
+    Component {
+        id: blackMetalShroudComponent
+
+        Item {
+            id: shroudAssembly
+            readonly property real shortSide: Math.min(width, height)
+            readonly property real railWidth: Math.max(2.0,
+                shortSide * 0.018)
+            readonly property real frameRadius: Math.max(6.0,
+                railWidth * 2.2)
+            readonly property real holeSize: Math.max(5.0,
+                railWidth * 2.15)
+            readonly property bool hasMiddleHoles: !root.isSubwoofer
+
+            // Tall speakers use four corner holes plus one at the midpoint of
+            // each side. The subwoofer keeps only the four corner holes.
+            Repeater {
+                model: shroudAssembly.hasMiddleHoles ? 6 : 4
+                Rectangle {
+                    readonly property bool isMiddle:
+                        shroudAssembly.hasMiddleHoles
+                        && index >= 2 && index < 4
+                    readonly property bool isBottom:
+                        shroudAssembly.hasMiddleHoles ? index >= 4
+                                                       : index >= 2
+                    width: shroudAssembly.holeSize
+                    height: width
+                    radius: width / 2
+                    color: "#020303"
+                    border.color: "#404447"
+                    border.width: Math.max(0.7, width * 0.12)
+                    x: index % 2 === 0 ? 0
+                                      : shroudAssembly.width - width
+                    y: isMiddle
+                       ? (shroudAssembly.height - height) / 2
+                       : isBottom ? shroudAssembly.height - height : 0
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.43
+                        height: width
+                        radius: width / 2
+                        color: "#000000"
+                        border.color: "#101112"
+                        border.width: Math.max(0.4, parent.width * 0.06)
+                    }
+                }
+            }
+
+            Item {
+                id: removableShroud
+                anchors.fill: parent
+                visible: root.showGrille
+
+                Canvas {
+                    id: blackWireCanvas
+                    anchors.fill: parent
+                    antialiasing: true
+                    opacity: 0.88
+                    property real currentLightSourceX: root.lightSourceX
+
+                    onCurrentLightSourceXChanged: requestPaint()
+                    onWidthChanged: requestPaint()
+                    onHeightChanged: requestPaint()
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.reset()
+                        ctx.clearRect(0, 0, width, height)
+
+                        // Clip the edge-to-edge wire field to the same rounded
+                        // silhouette as the continuous frame drawn below.
+                        var radius = shroudAssembly.frameRadius
+                        ctx.beginPath()
+                        ctx.moveTo(radius, 0)
+                        ctx.lineTo(width - radius, 0)
+                        ctx.quadraticCurveTo(width, 0, width, radius)
+                        ctx.lineTo(width, height - radius)
+                        ctx.quadraticCurveTo(width, height,
+                            width - radius, height)
+                        ctx.lineTo(radius, height)
+                        ctx.quadraticCurveTo(0, height,
+                            0, height - radius)
+                        ctx.lineTo(0, radius)
+                        ctx.quadraticCurveTo(0, 0, radius, 0)
+                        ctx.closePath()
+                        ctx.clip()
+
+                        var shortSide = Math.min(width, height)
+                        var spacing = Math.max(3.0, shortSide * 0.022)
+                        var wireWidth = Math.max(0.60,
+                            shortSide * 0.0033)
+                        var highlight = Math.max(0.18, Math.min(0.82,
+                            root.lightSourceX))
+                        var blackMetal = ctx.createLinearGradient(0, 0,
+                            width, 0)
+                        blackMetal.addColorStop(0.0, "#030405")
+                        blackMetal.addColorStop(Math.max(0.03,
+                            highlight - 0.16), "#17191a")
+                        blackMetal.addColorStop(highlight, "#555a5d")
+                        blackMetal.addColorStop(Math.min(0.97,
+                            highlight + 0.16), "#202325")
+                        blackMetal.addColorStop(1.0, "#050607")
+
+                        ctx.strokeStyle = blackMetal
+                        ctx.lineWidth = wireWidth
+                        for (var rising = -height; rising <= width;
+                             rising += spacing) {
+                            ctx.beginPath()
+                            ctx.moveTo(rising, 0)
+                            ctx.lineTo(rising + height, height)
+                            ctx.stroke()
+                        }
+                        for (var falling = 0;
+                             falling <= width + height;
+                             falling += spacing) {
+                            ctx.beginPath()
+                            ctx.moveTo(falling, 0)
+                            ctx.lineTo(falling - height, height)
+                            ctx.stroke()
+                        }
+                    }
+                }
+
+                // A single continuous stroke gives the frame genuinely rounded
+                // corners; it never fills the shroud interior.
+                Canvas {
+                    id: roundedShroudFrame
+                    anchors.fill: parent
+                    antialiasing: true
+                    property real currentLightSourceX: root.lightSourceX
+
+                    onCurrentLightSourceXChanged: requestPaint()
+                    onWidthChanged: requestPaint()
+                    onHeightChanged: requestPaint()
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.reset()
+                        ctx.clearRect(0, 0, width, height)
+
+                        var inset = shroudAssembly.railWidth / 2
+                        var radius = Math.max(1,
+                            shroudAssembly.frameRadius - inset)
+                        var highlight = Math.max(0.18, Math.min(0.82,
+                            root.lightSourceX))
+                        var frameMetal = ctx.createLinearGradient(0, 0,
+                            width, 0)
+                        frameMetal.addColorStop(0.0, "#030405")
+                        frameMetal.addColorStop(Math.max(0.03,
+                            highlight - 0.18), "#111314")
+                        frameMetal.addColorStop(highlight, "#3b3f42")
+                        frameMetal.addColorStop(Math.min(0.97,
+                            highlight + 0.18), "#17191a")
+                        frameMetal.addColorStop(1.0, "#050607")
+
+                        ctx.beginPath()
+                        ctx.moveTo(inset + radius, inset)
+                        ctx.lineTo(width - inset - radius, inset)
+                        ctx.quadraticCurveTo(width - inset, inset,
+                            width - inset, inset + radius)
+                        ctx.lineTo(width - inset,
+                            height - inset - radius)
+                        ctx.quadraticCurveTo(width - inset,
+                            height - inset,
+                            width - inset - radius, height - inset)
+                        ctx.lineTo(inset + radius, height - inset)
+                        ctx.quadraticCurveTo(inset, height - inset,
+                            inset, height - inset - radius)
+                        ctx.lineTo(inset, inset + radius)
+                        ctx.quadraticCurveTo(inset, inset,
+                            inset + radius, inset)
+                        ctx.closePath()
+                        ctx.strokeStyle = frameMetal
+                        ctx.lineWidth = shroudAssembly.railWidth
+                        ctx.stroke()
+                    }
+                }
+            }
         }
     }
 
@@ -1327,6 +1511,22 @@ PlasmoidItem {
 
             }
 
+            // The shroud sits outside the widest driver support and stops
+            // before the Technics logo, channel badge, and bass port.
+            Loader {
+                id: stereoShroudLoader
+                active: !root.isSubwoofer
+                sourceComponent: blackMetalShroudComponent
+                readonly property real frameClearance:
+                    driverColumn.spacing * 0.38
+                width: driverColumn.width * 1.08
+                height: footerControls.y - driverColumn.spacing
+                        + frameClearance * 2
+                x: driverColumn.x + (driverColumn.width - width) / 2
+                y: driverColumn.y - frameClearance
+                z: 20
+            }
+
             // Balanced subwoofer layout. One reference margin controls the
             // driver top/side clearances and the vent's bottom clearance.
             Item {
@@ -1463,6 +1663,21 @@ PlasmoidItem {
                             }
                         }
                     }
+                }
+
+                Loader {
+                    id: subwooferShroudLoader
+                    active: root.isSubwoofer
+                    sourceComponent: blackMetalShroudComponent
+                    // Keep the accepted 2% bottom clearance uniformly around
+                    // all four sides of the subwoofer mounting frame.
+                    width: subwooferDriver.width * 1.04
+                    height: subwooferDriver.height * 1.04
+                    x: subwooferDriver.x
+                       - (width - subwooferDriver.width) / 2
+                    y: subwooferDriver.y
+                       - (height - subwooferDriver.height) / 2
+                    z: 20
                 }
 
                 Text {

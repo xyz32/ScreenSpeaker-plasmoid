@@ -10,12 +10,14 @@ Kirigami.FormLayout {
     property string title: i18n("General")
     property int cfg_channelDefault: 0
     property int cfg_skinDefault: 0
+    property bool cfg_showGrilleDefault: true
     property int cfg_speakerHeightDefault: 500
     property int cfg_subwooferHeightDefault: 250
 
     // Plasma's cfg_<key> convention binds each control to KConfig.
     property alias cfg_channel: channelCombo.currentIndex
     property alias cfg_skin: skinCombo.currentIndex
+    property alias cfg_showGrille: showGrilleCheck.checked
     property alias cfg_speakerHeight: speakerHeightSpin.value
     property alias cfg_subwooferHeight: subwooferHeightSpin.value
 
@@ -35,6 +37,12 @@ Kirigami.FormLayout {
         id: skinCombo
         Kirigami.FormData.label: i18n("Cabinet skin:")
         model: [i18n("Cherry Wood"), i18n("Dark Grey"), i18n("Mahogany")]
+    }
+
+    CheckBox {
+        id: showGrilleCheck
+        text: i18n("Show black metal shroud")
+        checked: true
     }
 
     SpinBox {
