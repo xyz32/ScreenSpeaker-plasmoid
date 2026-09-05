@@ -11,6 +11,7 @@ Kirigami.FormLayout {
     property int cfg_channelDefault: 0
     property int cfg_skinDefault: 0
     property bool cfg_showGrilleDefault: true
+    property bool cfg_followOutputVolumeDefault: true
     property int cfg_speakerHeightDefault: 500
     property int cfg_subwooferHeightDefault: 250
 
@@ -18,6 +19,7 @@ Kirigami.FormLayout {
     property alias cfg_channel: channelCombo.currentIndex
     property alias cfg_skin: skinCombo.currentIndex
     property alias cfg_showGrille: showGrilleCheck.checked
+    property alias cfg_followOutputVolume: followOutputVolumeCheck.checked
     property alias cfg_speakerHeight: speakerHeightSpin.value
     property alias cfg_subwooferHeight: subwooferHeightSpin.value
 
@@ -88,5 +90,12 @@ Kirigami.FormLayout {
             text: i18n("Shroud")
             checked: true
         }
+    }
+
+    CheckBox {
+        id: followOutputVolumeCheck
+        Kirigami.FormData.label: i18n("Response:")
+        text: i18n("Follow output volume level")
+        checked: true
     }
 }

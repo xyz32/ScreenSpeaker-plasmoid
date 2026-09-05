@@ -18,6 +18,8 @@ PlasmoidItem {
     readonly property int skin: Plasmoid.configuration.skin
     readonly property bool isSubwoofer: root.channel === 2
     readonly property bool showGrille: Plasmoid.configuration.showGrille
+    readonly property bool followOutputVolume:
+        Plasmoid.configuration.followOutputVolume
 
     // Continuous room-light position across the speaker face. 0.32 and 0.68
     // preserve the accepted left/right shading at a screen edge; 0.5 is a
@@ -136,10 +138,24 @@ PlasmoidItem {
             if (!txt) return
 
             // Daemon format: the original 12 energy/activity values followed
-            // by dedicated 20-80 Hz stereo energy/activity values:
-            //   ... Le_ultra Re_ultra La_ultra Ra_ultra
+            // by dedicated 20-80 Hz stereo energy/activity values, optional
+            // LFE values, and a named output-volume token:
+            //   ... Le_ultra Re_ultra La_ultra Ra_ultra [...] volume=0.750
             var parts = txt.split(/\s+/)
             if (parts.length < 12) return
+
+            // Named parsing keeps this compatible with both 16- and 18-value
+            // payloads. An older daemon has no token and retains full response.
+            var outputVolume = 1.0
+            for (var partIndex = 16; partIndex < parts.length; partIndex++) {
+                if (parts[partIndex].indexOf("volume=") !== 0) continue
+                var parsedVolume = parseFloat(parts[partIndex].substring(7))
+                if (!isNaN(parsedVolume)) {
+                    outputVolume = Math.max(0.0,
+                        Math.min(1.0, parsedVolume))
+                }
+                break
+            }
 
             var eBass, eMid, eHigh, aBass, aMid, aHigh
             if (root.isSubwoofer) {
@@ -164,7 +180,13 @@ PlasmoidItem {
             }
 
             // Visual order is [Tweeter, Mid, Woofer] = [high, mid, bass].
-            root.audioLevels   = [eHigh, eMid, eBass]
+            // Applying the mixer factor after FFT normalization makes motion
+            // and reactive highlights directly proportional to output volume.
+            // Instances that disable this option retain the normalized response.
+            var responseScale = root.followOutputVolume ? outputVolume : 1.0
+            root.audioLevels = [eHigh * responseScale,
+                                eMid * responseScale,
+                                eBass * responseScale]
             root.audioActivity = [aHigh, aMid, aBass]
             if (root.status !== "running") root.status = "running"
         }
@@ -430,19 +452,12 @@ PlasmoidItem {
                 railWidth * 2.2)
             readonly property real holeSize: Math.max(5.0,
                 railWidth * 2.15)
-            readonly property bool hasMiddleHoles: !root.isSubwoofer
 
-            // Tall speakers use four corner holes plus one at the midpoint of
-            // each side. The subwoofer keeps only the four corner holes.
+            // Every shroud uses only four permanent corner mounting holes.
             Repeater {
-                model: shroudAssembly.hasMiddleHoles ? 6 : 4
+                model: 4
                 Rectangle {
-                    readonly property bool isMiddle:
-                        shroudAssembly.hasMiddleHoles
-                        && index >= 2 && index < 4
-                    readonly property bool isBottom:
-                        shroudAssembly.hasMiddleHoles ? index >= 4
-                                                       : index >= 2
+                    readonly property bool isBottom: index >= 2
                     width: shroudAssembly.holeSize
                     height: width
                     radius: width / 2
@@ -451,9 +466,7 @@ PlasmoidItem {
                     border.width: Math.max(0.7, width * 0.12)
                     x: index % 2 === 0 ? 0
                                       : shroudAssembly.width - width
-                    y: isMiddle
-                       ? (shroudAssembly.height - height) / 2
-                       : isBottom ? shroudAssembly.height - height : 0
+                    y: isBottom ? shroudAssembly.height - height : 0
 
                     Rectangle {
                         anchors.centerIn: parent
