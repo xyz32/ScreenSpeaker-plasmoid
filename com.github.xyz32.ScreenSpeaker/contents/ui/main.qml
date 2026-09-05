@@ -480,10 +480,14 @@ PlasmoidItem {
                 }
             }
 
-            Item {
-                id: removableShroud
+            Loader {
+                id: removableShroudLoader
                 anchors.fill: parent
-                visible: root.showGrille
+                active: root.showGrille
+                sourceComponent: Component {
+                    Item {
+                        id: removableShroud
+                        anchors.fill: parent
 
                 Canvas {
                     id: blackWireCanvas
@@ -607,6 +611,8 @@ PlasmoidItem {
                         ctx.stroke()
                     }
                 }
+                    }
+                }
             }
         }
     }
@@ -626,12 +632,6 @@ PlasmoidItem {
             property real edgeWidth: 4
             property real lightSourceX: root.lightSourceX
             readonly property real lightSourceY: 0.28
-            readonly property real lightBias: Math.max(-1.0,
-                Math.min(1.0, (0.5 - lightSourceX) / 0.18))
-            readonly property real leftRimAlpha: 0.08
-                + Math.max(0, lightBias) * 0.34
-            readonly property real rightRimAlpha: 0.08
-                + Math.max(0, -lightBias) * 0.34
             preferredRendererType: Shape.CurveRenderer
             antialiasing: true
 
@@ -807,95 +807,6 @@ PlasmoidItem {
                 }
             }
 
-            // A thin highlight follows the upper-left outline when the room
-            // light is on the left. Rounded caps make the crossfade seamless.
-            ShapePath {
-                strokeColor: Qt.rgba(0.48, 0.51, 0.53,
-                    mountingFrame.leftRimAlpha)
-                strokeWidth: Math.max(0.5,
-                    mountingFrame.renderedEdgeWidth * 0.42)
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                startX: mountingFrame.leftEdge
-                startY: mountingFrame.height / 2
-                PathLine {
-                    x: mountingFrame.leftEdge
-                    y: mountingFrame.topEdge + mountingFrame.cutDepth
-                }
-                PathQuad {
-                    controlX: mountingFrame.leftEdge
-                    controlY: mountingFrame.topEdge
-                              + mountingFrame.cutDepth
-                              - mountingFrame.fillet
-                    x: mountingFrame.leftEdge + mountingFrame.fillet
-                    y: mountingFrame.topEdge
-                       + mountingFrame.cutDepth
-                       - mountingFrame.fillet * 2
-                }
-                PathLine {
-                    x: mountingFrame.leftEdge
-                       + mountingFrame.cutDepth
-                       - mountingFrame.fillet * 2
-                    y: mountingFrame.topEdge + mountingFrame.fillet
-                }
-                PathQuad {
-                    controlX: mountingFrame.leftEdge
-                              + mountingFrame.cutDepth
-                              - mountingFrame.fillet
-                    controlY: mountingFrame.topEdge
-                    x: mountingFrame.leftEdge + mountingFrame.cutDepth
-                    y: mountingFrame.topEdge
-                }
-                PathLine {
-                    x: mountingFrame.width / 2
-                    y: mountingFrame.topEdge
-                }
-            }
-
-            // Mirror the same highlight on the upper-right outline as the
-            // light source moves across the speaker face.
-            ShapePath {
-                strokeColor: Qt.rgba(0.48, 0.51, 0.53,
-                    mountingFrame.rightRimAlpha)
-                strokeWidth: Math.max(0.5,
-                    mountingFrame.renderedEdgeWidth * 0.42)
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                startX: mountingFrame.width / 2
-                startY: mountingFrame.topEdge
-                PathLine {
-                    x: mountingFrame.rightEdge - mountingFrame.cutDepth
-                    y: mountingFrame.topEdge
-                }
-                PathQuad {
-                    controlX: mountingFrame.rightEdge
-                              - mountingFrame.cutDepth
-                              + mountingFrame.fillet
-                    controlY: mountingFrame.topEdge
-                    x: mountingFrame.rightEdge
-                       - mountingFrame.cutDepth
-                       + mountingFrame.fillet * 2
-                    y: mountingFrame.topEdge + mountingFrame.fillet
-                }
-                PathLine {
-                    x: mountingFrame.rightEdge - mountingFrame.fillet
-                    y: mountingFrame.topEdge
-                       + mountingFrame.cutDepth
-                       - mountingFrame.fillet * 2
-                }
-                PathQuad {
-                    controlX: mountingFrame.rightEdge
-                    controlY: mountingFrame.topEdge
-                              + mountingFrame.cutDepth
-                              - mountingFrame.fillet
-                    x: mountingFrame.rightEdge
-                    y: mountingFrame.topEdge + mountingFrame.cutDepth
-                }
-                PathLine {
-                    x: mountingFrame.rightEdge
-                    y: mountingFrame.height / 2
-                }
-            }
         }
     }
 
