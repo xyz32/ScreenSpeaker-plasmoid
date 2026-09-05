@@ -21,63 +21,72 @@ Kirigami.FormLayout {
     property alias cfg_speakerHeight: speakerHeightSpin.value
     property alias cfg_subwooferHeight: subwooferHeightSpin.value
 
-    // Top breathing room — Kirigami.FormLayout otherwise puts the first
-    // control flush against the dialog header.
-    Item {
-        Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
-    }
-
-    ComboBox {
-        id: channelCombo
-        Kirigami.FormData.label: i18n("Speaker channel:")
-        model: [i18n("Left"), i18n("Right"), i18n("Subwoofer")]
-    }
-
-    ComboBox {
-        id: skinCombo
-        Kirigami.FormData.label: i18n("Cabinet skin:")
-        model: [i18n("Cherry Wood"), i18n("Dark Grey"), i18n("Mahogany")]
-    }
-
-    CheckBox {
-        id: showGrilleCheck
-        text: i18n("Show black metal shroud")
-        checked: true
-    }
-
-    SpinBox {
-        id: speakerHeightSpin
-        visible: channelCombo.currentIndex !== 2
-        Kirigami.FormData.label: i18n("Speaker height (px):")
-        from: 120
-        to: 2000
-        value: 500
-        stepSize: 20
-    }
-
-    SpinBox {
-        id: subwooferHeightSpin
-        visible: channelCombo.currentIndex === 2
-        Kirigami.FormData.label: i18n("Subwoofer size (px):")
-        from: 120
-        to: 2000
-        value: 250
-        stepSize: 10
-    }
-
     Label {
+        Layout.topMargin: Kirigami.Units.smallSpacing * 2
         Layout.preferredWidth: 420
+        Layout.maximumWidth: 420
         wrapMode: Text.WordWrap
-        text: i18n("Left and Right use a tall enclosure. Subwoofer uses a separate balanced rectangular size that defaults to half the stereo speaker height.")
+        text: channelCombo.currentIndex === 2
+            ? i18n("The subwoofer keeps its own rectangular enclosure size.")
+            : i18n("Add another widget set to %1 for a stereo pair.",
+                channelCombo.currentIndex === 0 ? i18n("Right")
+                                                : i18n("Left"))
         font.pixelSize: Kirigami.Theme.smallFont.pixelSize
         opacity: 0.75
     }
 
-    Label {
-        Layout.preferredWidth: 420
-        wrapMode: Text.WordWrap
-        text: i18n("Each speaker instance visualizes one channel. Add the widget twice — set one to Left and one to Right — for a stereo pair.")
-        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-        opacity: 0.75
+    RowLayout {
+        Kirigami.FormData.label: i18n("Channel / size:")
+        spacing: Kirigami.Units.smallSpacing
+
+        ComboBox {
+            id: channelCombo
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 9
+            model: [i18n("Left"), i18n("Right"), i18n("Subwoofer")]
+        }
+
+        StackLayout {
+            currentIndex: channelCombo.currentIndex === 2 ? 1 : 0
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 5
+
+            SpinBox {
+                id: speakerHeightSpin
+                Layout.fillWidth: true
+                from: 120
+                to: 2000
+                value: 500
+                stepSize: 20
+            }
+
+            SpinBox {
+                id: subwooferHeightSpin
+                Layout.fillWidth: true
+                from: 120
+                to: 2000
+                value: 250
+                stepSize: 10
+            }
+        }
+    }
+
+    RowLayout {
+        Kirigami.FormData.label: i18n("Appearance:")
+        spacing: Kirigami.Units.smallSpacing
+
+        ComboBox {
+            id: skinCombo
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 9
+            model: [i18n("Cherry Wood"), i18n("Dark Grey"),
+                i18n("Mahogany")]
+        }
+
+        CheckBox {
+            id: showGrilleCheck
+            text: i18n("Shroud")
+            checked: true
+        }
     }
 }
