@@ -8,13 +8,15 @@ plus a dedicated ultra-low band (20-80 Hz), and serves the latest snapshot over
 localhost HTTP for the QML widget to poll. When the sink exposes a 2.1 channel
 map, its real LFE channel is captured and processed separately.
 
-Output format: the original 12 values followed by four stereo ultra-low values
-and, when available, two LFE values:
+Output format: the original 12 values followed by four stereo ultra-low values,
+optional LFE values, and the active sink's linear output-volume factor:
   'Le_bass Le_mid Le_treble Re_bass Re_mid Re_treble
    La_bass La_mid La_treble Ra_bass Ra_mid Ra_treble
-   Le_ultra Re_ultra La_ultra Ra_ultra [LFEe_ultra LFEa_ultra]'
+   Le_ultra Re_ultra La_ultra Ra_ultra [LFEe_ultra LFEa_ultra]
+   volume=<0.000..1.000>'
 energy drives vibration amplitude; activity (fraction of active bins) drives
-vibration rate.
+vibration rate. QML multiplies normalized energy by volume so motion and
+reactive highlights follow the mixer output level proportionally.
 
 The ephemeral port is written to `<output>.port`.
 Exits when heartbeat file (`<output>.alive`) is older than 30s.
@@ -316,6 +318,50 @@ def main():
         except OSError:
             return False
 
+    # Sink-monitor PCM is normalized into logarithmic energy bands, so it does
+    # not preserve a linear relationship with the user's output-volume setting.
+    # Poll that setting once for the shared daemon (rather than once per widget)
+    # and publish it with every snapshot. Keeping this work on a background
+    # thread prevents a slow pactl response from interrupting FFT capture.
+    sink_name = (args.device[:-8]
+                 if args.device.endswith(".monitor") else args.device)
+    volume_state = {"value": 1.0}
+
+    def read_output_volume(fallback):
+        try:
+            result = subprocess.run(
+                ["pactl", "-f", "json", "list", "sinks"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=0.5,
+            )
+            for sink in json.loads(result.stdout):
+                if sink.get("name") != sink_name:
+                    continue
+                if sink.get("mute", False):
+                    return 0.0
+                channels = sink.get("volume", {}).values()
+                values = [float(channel["value"]) / 65536.0
+                          for channel in channels
+                          if isinstance(channel, dict)
+                          and isinstance(channel.get("value"), (int, float))]
+                if values:
+                    return float(np.clip(np.mean(values), 0.0, 1.0))
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError,
+                json.JSONDecodeError):
+            pass
+        return fallback
+
+    def monitor_output_volume():
+        while True:
+            volume_state["value"] = read_output_volume(
+                volume_state["value"])
+            time.sleep(0.5)
+
+    threading.Thread(target=monitor_output_volume, daemon=True).start()
+
     while True:
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -358,8 +404,8 @@ def main():
                     ring_lfe, smooth_lfe)
 
             # Preserve the original 16-value stereo prefix. A real LFE channel,
-            # when present, is appended so newer QML can prefer it while older
-            # clients continue to consume the stereo ultra-low values.
+            # when present, is appended so older clients remain compatible.
+            # The named volume token is last and safely ignored by old QML.
             line = (f"{sl[0]:.3f} {sl[1]:.3f} {sl[2]:.3f} "
                     f"{sr[0]:.3f} {sr[1]:.3f} {sr[2]:.3f} "
                     f"{al[0]:.3f} {al[1]:.3f} {al[2]:.3f} "
@@ -367,6 +413,7 @@ def main():
                     f"{ul:.3f} {ur:.3f} {aul:.3f} {aur:.3f}")
             if capture_lfe:
                 line += f" {lfe_ultra:.3f} {lfe_activity:.3f}"
+            line += f" volume={volume_state['value']:.3f}"
             with _state_lock:
                 _state["payload"] = line
 
