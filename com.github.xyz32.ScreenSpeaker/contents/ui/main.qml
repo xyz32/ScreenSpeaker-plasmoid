@@ -60,6 +60,25 @@ PlasmoidItem {
     readonly property real originalWidth: 300
     readonly property real originalHeight: 800
 
+    function mountingFrameEdgeWidth(frameSize, nominalWidth) {
+        return Math.min(nominalWidth, Math.max(0.6, frameSize * 0.035))
+    }
+
+    function mountingScrewCenterInset(frameSize, nominalEdgeWidth,
+                                      surroundRatio) {
+        var edgeWidth = mountingFrameEdgeWidth(frameSize,
+            nominalEdgeWidth)
+        var span = Math.max(1, frameSize - edgeWidth)
+        var cornerScale = Math.min(1, span / 50)
+        var diagonalThreshold = edgeWidth
+            + span * (0.264 - 0.05) * cornerScale
+        var frameInnerRadius = (frameSize - diagonalThreshold)
+            / Math.SQRT2 - edgeWidth / 2
+        var surroundRadius = frameSize * surroundRatio / 2
+        var centeredRadius = (frameInnerRadius + surroundRadius) / 2
+        return frameSize / 2 - centeredRadius / Math.SQRT2
+    }
+
     // Shared-daemon state. All instances use a FIXED data path (no PID suffix)
     // so the first instance launches the daemon and the rest discover the same
     // one via its singleton lock. One parec + one FFT serves every speaker.
@@ -395,9 +414,297 @@ PlasmoidItem {
         }
     }
 
-    // Reusable mounting screw: a metallic disc with a slot head, a bright edge
-    // toward the room light (upper-left) and a soft cast shadow on the far
-    // side. `size` is set by the caller; corner placement is done at the site.
+    // Reusable mounting plate. The long sides preserve the square housing,
+    // while each deep diagonal corner cut blends into them through quadratic
+    // fillets (selected corner mockup C). A dark matte radial gradient follows
+    // the same moving room-light position as the speaker-cone shading.
+    Component {
+        id: mountingFrameComponent
+
+        Shape {
+            id: mountingFrame
+            anchors.fill: parent
+            property color frameColor: "#1a1c1d"
+            property color edgeColor: "#3d4244"
+            property real edgeWidth: 4
+            property real lightSourceX: root.lightSourceX
+            readonly property real lightSourceY: 0.28
+            readonly property real lightBias: Math.max(-1.0,
+                Math.min(1.0, (0.5 - lightSourceX) / 0.18))
+            readonly property real leftRimAlpha: 0.08
+                + Math.max(0, lightBias) * 0.34
+            readonly property real rightRimAlpha: 0.08
+                + Math.max(0, -lightBias) * 0.34
+            preferredRendererType: Shape.CurveRenderer
+            antialiasing: true
+
+            readonly property real renderedEdgeWidth:
+                root.mountingFrameEdgeWidth(Math.min(width, height),
+                    edgeWidth)
+            readonly property real inset: renderedEdgeWidth / 2
+            readonly property real leftEdge: inset
+            readonly property real topEdge: inset
+            readonly property real rightEdge: width - inset
+            readonly property real bottomEdge: height - inset
+            readonly property real span: Math.max(1,
+                Math.min(width, height) - renderedEdgeWidth)
+            // Preserve mockup C at normal sizes; progressively soften the cut
+            // only when the whole frame is too small to clear its screw heads.
+            readonly property real cornerScale: Math.min(1, span / 50)
+            readonly property real cutDepth: span * 0.264 * cornerScale
+            readonly property real fillet: span * 0.05 * cornerScale
+
+            ShapePath {
+                strokeColor: mountingFrame.edgeColor
+                strokeWidth: mountingFrame.renderedEdgeWidth
+                fillGradient: RadialGradient {
+                    centerX: mountingFrame.width
+                             * mountingFrame.lightSourceX
+                    centerY: mountingFrame.height
+                             * mountingFrame.lightSourceY
+                    focalX: mountingFrame.width
+                            * mountingFrame.lightSourceX
+                    focalY: mountingFrame.height
+                            * mountingFrame.lightSourceY
+                    centerRadius: Math.max(mountingFrame.width,
+                        mountingFrame.height) * 0.92
+                    GradientStop {
+                        position: 0.0
+                        color: Qt.lighter(mountingFrame.frameColor, 1.65)
+                    }
+                    GradientStop {
+                        position: 0.32
+                        color: Qt.lighter(mountingFrame.frameColor, 1.22)
+                    }
+                    GradientStop {
+                        position: 0.62
+                        color: mountingFrame.frameColor
+                    }
+                    GradientStop {
+                        position: 1.0
+                        color: Qt.darker(mountingFrame.frameColor, 1.55)
+                    }
+                }
+                startX: mountingFrame.leftEdge + mountingFrame.cutDepth
+                startY: mountingFrame.topEdge
+
+                // Top side and top-right filleted cut.
+                PathLine {
+                    x: mountingFrame.rightEdge - mountingFrame.cutDepth
+                    y: mountingFrame.topEdge
+                }
+                PathQuad {
+                    controlX: mountingFrame.rightEdge
+                              - mountingFrame.cutDepth
+                              + mountingFrame.fillet
+                    controlY: mountingFrame.topEdge
+                    x: mountingFrame.rightEdge
+                       - mountingFrame.cutDepth
+                       + mountingFrame.fillet * 2
+                    y: mountingFrame.topEdge + mountingFrame.fillet
+                }
+                PathLine {
+                    x: mountingFrame.rightEdge - mountingFrame.fillet
+                    y: mountingFrame.topEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                }
+                PathQuad {
+                    controlX: mountingFrame.rightEdge
+                    controlY: mountingFrame.topEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    x: mountingFrame.rightEdge
+                    y: mountingFrame.topEdge + mountingFrame.cutDepth
+                }
+
+                // Right side and bottom-right filleted cut.
+                PathLine {
+                    x: mountingFrame.rightEdge
+                    y: mountingFrame.bottomEdge
+                       - mountingFrame.cutDepth
+                }
+                PathQuad {
+                    controlX: mountingFrame.rightEdge
+                    controlY: mountingFrame.bottomEdge
+                              - mountingFrame.cutDepth
+                              + mountingFrame.fillet
+                    x: mountingFrame.rightEdge - mountingFrame.fillet
+                    y: mountingFrame.bottomEdge
+                       - mountingFrame.cutDepth
+                       + mountingFrame.fillet * 2
+                }
+                PathLine {
+                    x: mountingFrame.rightEdge
+                       - mountingFrame.cutDepth
+                       + mountingFrame.fillet * 2
+                    y: mountingFrame.bottomEdge - mountingFrame.fillet
+                }
+                PathQuad {
+                    controlX: mountingFrame.rightEdge
+                              - mountingFrame.cutDepth
+                              + mountingFrame.fillet
+                    controlY: mountingFrame.bottomEdge
+                    x: mountingFrame.rightEdge - mountingFrame.cutDepth
+                    y: mountingFrame.bottomEdge
+                }
+
+                // Bottom side and bottom-left filleted cut.
+                PathLine {
+                    x: mountingFrame.leftEdge + mountingFrame.cutDepth
+                    y: mountingFrame.bottomEdge
+                }
+                PathQuad {
+                    controlX: mountingFrame.leftEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    controlY: mountingFrame.bottomEdge
+                    x: mountingFrame.leftEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                    y: mountingFrame.bottomEdge - mountingFrame.fillet
+                }
+                PathLine {
+                    x: mountingFrame.leftEdge + mountingFrame.fillet
+                    y: mountingFrame.bottomEdge
+                       - mountingFrame.cutDepth
+                       + mountingFrame.fillet * 2
+                }
+                PathQuad {
+                    controlX: mountingFrame.leftEdge
+                    controlY: mountingFrame.bottomEdge
+                              - mountingFrame.cutDepth
+                              + mountingFrame.fillet
+                    x: mountingFrame.leftEdge
+                    y: mountingFrame.bottomEdge - mountingFrame.cutDepth
+                }
+
+                // Left side and top-left filleted cut.
+                PathLine {
+                    x: mountingFrame.leftEdge
+                    y: mountingFrame.topEdge + mountingFrame.cutDepth
+                }
+                PathQuad {
+                    controlX: mountingFrame.leftEdge
+                    controlY: mountingFrame.topEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    x: mountingFrame.leftEdge + mountingFrame.fillet
+                    y: mountingFrame.topEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                }
+                PathLine {
+                    x: mountingFrame.leftEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                    y: mountingFrame.topEdge + mountingFrame.fillet
+                }
+                PathQuad {
+                    controlX: mountingFrame.leftEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    controlY: mountingFrame.topEdge
+                    x: mountingFrame.leftEdge + mountingFrame.cutDepth
+                    y: mountingFrame.topEdge
+                }
+            }
+
+            // A thin highlight follows the upper-left outline when the room
+            // light is on the left. Rounded caps make the crossfade seamless.
+            ShapePath {
+                strokeColor: Qt.rgba(0.48, 0.51, 0.53,
+                    mountingFrame.leftRimAlpha)
+                strokeWidth: Math.max(0.5,
+                    mountingFrame.renderedEdgeWidth * 0.42)
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                startX: mountingFrame.leftEdge
+                startY: mountingFrame.height / 2
+                PathLine {
+                    x: mountingFrame.leftEdge
+                    y: mountingFrame.topEdge + mountingFrame.cutDepth
+                }
+                PathQuad {
+                    controlX: mountingFrame.leftEdge
+                    controlY: mountingFrame.topEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    x: mountingFrame.leftEdge + mountingFrame.fillet
+                    y: mountingFrame.topEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                }
+                PathLine {
+                    x: mountingFrame.leftEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                    y: mountingFrame.topEdge + mountingFrame.fillet
+                }
+                PathQuad {
+                    controlX: mountingFrame.leftEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    controlY: mountingFrame.topEdge
+                    x: mountingFrame.leftEdge + mountingFrame.cutDepth
+                    y: mountingFrame.topEdge
+                }
+                PathLine {
+                    x: mountingFrame.width / 2
+                    y: mountingFrame.topEdge
+                }
+            }
+
+            // Mirror the same highlight on the upper-right outline as the
+            // light source moves across the speaker face.
+            ShapePath {
+                strokeColor: Qt.rgba(0.48, 0.51, 0.53,
+                    mountingFrame.rightRimAlpha)
+                strokeWidth: Math.max(0.5,
+                    mountingFrame.renderedEdgeWidth * 0.42)
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                startX: mountingFrame.width / 2
+                startY: mountingFrame.topEdge
+                PathLine {
+                    x: mountingFrame.rightEdge - mountingFrame.cutDepth
+                    y: mountingFrame.topEdge
+                }
+                PathQuad {
+                    controlX: mountingFrame.rightEdge
+                              - mountingFrame.cutDepth
+                              + mountingFrame.fillet
+                    controlY: mountingFrame.topEdge
+                    x: mountingFrame.rightEdge
+                       - mountingFrame.cutDepth
+                       + mountingFrame.fillet * 2
+                    y: mountingFrame.topEdge + mountingFrame.fillet
+                }
+                PathLine {
+                    x: mountingFrame.rightEdge - mountingFrame.fillet
+                    y: mountingFrame.topEdge
+                       + mountingFrame.cutDepth
+                       - mountingFrame.fillet * 2
+                }
+                PathQuad {
+                    controlX: mountingFrame.rightEdge
+                    controlY: mountingFrame.topEdge
+                              + mountingFrame.cutDepth
+                              - mountingFrame.fillet
+                    x: mountingFrame.rightEdge
+                    y: mountingFrame.topEdge + mountingFrame.cutDepth
+                }
+                PathLine {
+                    x: mountingFrame.rightEdge
+                    y: mountingFrame.height / 2
+                }
+            }
+        }
+    }
+
+    // Reusable hex socket cap screw: a metallic circular cap with a recessed
+    // six-sided drive, a bright edge toward the room light, and a soft cast
+    // shadow on the far side. `size` and socket angle are set by the caller.
     Component {
         id: screwComponent
 
@@ -405,6 +712,7 @@ PlasmoidItem {
             id: screw
             property real size: 10
             property real lightSourceX: 0.5
+            property real socketAngle: 0
             readonly property real lightBias: Math.max(-1.0, Math.min(1.0,
                 (0.5 - lightSourceX) / 0.18))
             width: size
@@ -440,20 +748,53 @@ PlasmoidItem {
                     y: parent.height * 0.12
                 }
 
-                // Slotted head (Phillips-ish cross): two thin dark bars.
-                Rectangle {
+                // Recessed hex socket. The caller supplies a stable
+                // pseudo-random angle so neighboring caps do not line up.
+                Item {
+                    id: hexSocket
                     anchors.centerIn: parent
-                    width: parent.width * 0.62
-                    height: Math.max(1, parent.width * 0.12)
-                    radius: height / 2
-                    color: "#141416"
-                }
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.max(1, parent.width * 0.12)
-                    height: parent.height * 0.62
-                    radius: width / 2
-                    color: "#141416"
+                    width: parent.width * 0.52
+                    height: width
+                    rotation: screw.socketAngle
+
+                    Shape {
+                        anchors.fill: parent
+                        preferredRendererType: Shape.CurveRenderer
+                        antialiasing: true
+
+                        ShapePath {
+                            strokeColor: "#08090a"
+                            strokeWidth: Math.max(0.6,
+                                hexSocket.width * 0.09)
+                            fillColor: "#121416"
+                            startX: hexSocket.width * 0.5
+                            startY: 0
+                            PathLine {
+                                x: hexSocket.width * 0.933
+                                y: hexSocket.height * 0.25
+                            }
+                            PathLine {
+                                x: hexSocket.width * 0.933
+                                y: hexSocket.height * 0.75
+                            }
+                            PathLine {
+                                x: hexSocket.width * 0.5
+                                y: hexSocket.height
+                            }
+                            PathLine {
+                                x: hexSocket.width * 0.067
+                                y: hexSocket.height * 0.75
+                            }
+                            PathLine {
+                                x: hexSocket.width * 0.067
+                                y: hexSocket.height * 0.25
+                            }
+                            PathLine {
+                                x: hexSocket.width * 0.5
+                                y: 0
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -597,13 +938,17 @@ PlasmoidItem {
                     width: parent.width * 0.45
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
+                    readonly property real frameEdgeWidth: 2
+                    readonly property real surroundRatio: 0.72
 
-                    Rectangle {
+                    Loader {
                         anchors.fill: parent
-                        color: "#2b2b2b"
-                        border.color: "#4a4a4a"
-                        border.width: 2
-                        radius: 6
+                        sourceComponent: mountingFrameComponent
+                        onLoaded: {
+                            item.frameColor = "#1b1d1e"
+                            item.edgeColor = "#222527"
+                            item.edgeWidth = 2
+                        }
                     }
 
                     // Four corner mounting screws on the enclosing housing.
@@ -612,12 +957,24 @@ PlasmoidItem {
                         Loader {
                             sourceComponent: screwComponent
                             readonly property real sz: driverColumn.mountingScrewSize
-                            readonly property real inset: parent.width * 0.075
+                            readonly property real centerInset:
+                                root.mountingScrewCenterInset(parent.width,
+                                    parent.frameEdgeWidth,
+                                    parent.surroundRatio)
+                            readonly property real socketAngle:
+                                ((index + 1) * 37
+                                 + Math.round(parent.surroundRatio * 100))
+                                % 60
                             width: sz; height: sz
-                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
-                            y: (index < 2) ? inset : parent.height - sz - inset
+                            x: (index % 2 === 0)
+                               ? centerInset - sz / 2
+                               : parent.width - centerInset - sz / 2
+                            y: (index < 2)
+                               ? centerInset - sz / 2
+                               : parent.height - centerInset - sz / 2
                             onLoaded: {
                                 item.size = sz
+                                item.socketAngle = socketAngle
                                 item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                             }
                         }
@@ -692,13 +1049,17 @@ PlasmoidItem {
                     width: parent.width * 0.65
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
+                    readonly property real frameEdgeWidth: 3
+                    readonly property real surroundRatio: 0.82
 
-                    Rectangle {
+                    Loader {
                         anchors.fill: parent
-                        color: "#252525"
-                        border.color: "#4a4a4a"
-                        border.width: 3
-                        radius: 8
+                        sourceComponent: mountingFrameComponent
+                        onLoaded: {
+                            item.frameColor = "#17191a"
+                            item.edgeColor = "#1f2224"
+                            item.edgeWidth = 3
+                        }
                     }
 
                     // Four corner mounting screws on the enclosing housing.
@@ -707,12 +1068,24 @@ PlasmoidItem {
                         Loader {
                             sourceComponent: screwComponent
                             readonly property real sz: driverColumn.mountingScrewSize
-                            readonly property real inset: parent.width * 0.075
+                            readonly property real centerInset:
+                                root.mountingScrewCenterInset(parent.width,
+                                    parent.frameEdgeWidth,
+                                    parent.surroundRatio)
+                            readonly property real socketAngle:
+                                ((index + 1) * 37
+                                 + Math.round(parent.surroundRatio * 100))
+                                % 60
                             width: sz; height: sz
-                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
-                            y: (index < 2) ? inset : parent.height - sz - inset
+                            x: (index % 2 === 0)
+                               ? centerInset - sz / 2
+                               : parent.width - centerInset - sz / 2
+                            y: (index < 2)
+                               ? centerInset - sz / 2
+                               : parent.height - centerInset - sz / 2
                             onLoaded: {
                                 item.size = sz
+                                item.socketAngle = socketAngle
                                 item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                             }
                         }
@@ -784,13 +1157,17 @@ PlasmoidItem {
                     width: parent.width * 0.95
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
+                    readonly property real frameEdgeWidth: 4
+                    readonly property real surroundRatio: 0.89
 
-                    Rectangle {
+                    Loader {
                         anchors.fill: parent
-                        color: "#303030"
-                        border.color: "#5e5e5e"
-                        border.width: 4
-                        radius: 10
+                        sourceComponent: mountingFrameComponent
+                        onLoaded: {
+                            item.frameColor = "#1a1c1d"
+                            item.edgeColor = "#282c2e"
+                            item.edgeWidth = 4
+                        }
                     }
 
                     // Four corner mounting screws on the enclosing housing.
@@ -799,12 +1176,24 @@ PlasmoidItem {
                         Loader {
                             sourceComponent: screwComponent
                             readonly property real sz: driverColumn.mountingScrewSize
-                            readonly property real inset: parent.width * 0.08
+                            readonly property real centerInset:
+                                root.mountingScrewCenterInset(parent.width,
+                                    parent.frameEdgeWidth,
+                                    parent.surroundRatio)
+                            readonly property real socketAngle:
+                                ((index + 1) * 37
+                                 + Math.round(parent.surroundRatio * 100))
+                                % 60
                             width: sz; height: sz
-                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
-                            y: (index < 2) ? inset : parent.height - sz - inset
+                            x: (index % 2 === 0)
+                               ? centerInset - sz / 2
+                               : parent.width - centerInset - sz / 2
+                            y: (index < 2)
+                               ? centerInset - sz / 2
+                               : parent.height - centerInset - sz / 2
                             onLoaded: {
                                 item.size = sz
+                                item.socketAngle = socketAngle
                                 item.lightSourceX = Qt.binding(function() { return root.lightSourceX })
                             }
                         }
@@ -960,13 +1349,17 @@ PlasmoidItem {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: subwooferLayout.driverSize
                     height: width
+                    readonly property real frameEdgeWidth: 4
+                    readonly property real surroundRatio: 0.91
 
-                    Rectangle {
+                    Loader {
                         anchors.fill: parent
-                        color: "#303030"
-                        border.color: "#5e5e5e"
-                        border.width: 4
-                        radius: 12
+                        sourceComponent: mountingFrameComponent
+                        onLoaded: {
+                            item.frameColor = "#1a1c1d"
+                            item.edgeColor = "#282c2e"
+                            item.edgeWidth = 4
+                        }
                     }
 
                     Repeater {
@@ -974,12 +1367,24 @@ PlasmoidItem {
                         Loader {
                             sourceComponent: screwComponent
                             readonly property real sz: subwooferLayout.mountingScrewSize
-                            readonly property real inset: parent.width * 0.065
+                            readonly property real centerInset:
+                                root.mountingScrewCenterInset(parent.width,
+                                    parent.frameEdgeWidth,
+                                    parent.surroundRatio)
+                            readonly property real socketAngle:
+                                ((index + 1) * 37
+                                 + Math.round(parent.surroundRatio * 100))
+                                % 60
                             width: sz; height: sz
-                            x: (index % 2 === 0) ? inset : parent.width - sz - inset
-                            y: (index < 2) ? inset : parent.height - sz - inset
+                            x: (index % 2 === 0)
+                               ? centerInset - sz / 2
+                               : parent.width - centerInset - sz / 2
+                            y: (index < 2)
+                               ? centerInset - sz / 2
+                               : parent.height - centerInset - sz / 2
                             onLoaded: {
                                 item.size = sz
+                                item.socketAngle = socketAngle
                                 item.lightSourceX = Qt.binding(function() {
                                     return root.lightSourceX
                                 })
