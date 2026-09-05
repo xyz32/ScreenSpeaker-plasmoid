@@ -16,6 +16,10 @@
         <entry name="showGrille" type="Bool">
             <default>true</default>
         </entry>
+        <!-- Whether driver response scales with the active output volume. -->
+        <entry name="followOutputVolume" type="Bool">
+            <default>true</default>
+        </entry>
         <!-- Stereo speaker height in pixels. Width follows the 300:800 aspect
              ratio. Set the same value on Left and Right instances to keep a
              stereo pair matched. -->
