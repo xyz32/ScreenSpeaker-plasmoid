@@ -87,7 +87,7 @@ Kirigami.FormLayout {
 
         CheckBox {
             id: showGrilleCheck
-            text: i18n("Shroud")
+            text: i18n("Cloth screen")
             checked: true
         }
     }

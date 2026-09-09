@@ -437,11 +437,11 @@ PlasmoidItem {
         }
     }
 
-    // Backing-free black-metal shroud. Permanent recessed mounting holes are
-    // painted first, then the removable wire lattice and rounded frame sit over
-    // them. Only strokes and narrow rails contain pixels between the drivers.
+    // Translucent acoustic-cloth shroud. Permanent recessed mounting holes
+    // are painted first, then the removable softly textured gray fabric and
+    // rounded frame sit over them.
     Component {
-        id: blackMetalShroudComponent
+        id: acousticClothShroudComponent
 
         Item {
             id: shroudAssembly
@@ -490,13 +490,10 @@ PlasmoidItem {
                         anchors.fill: parent
 
                 Canvas {
-                    id: blackWireCanvas
+                    id: acousticClothCanvas
                     anchors.fill: parent
                     antialiasing: true
-                    opacity: 0.88
-                    property real currentLightSourceX: root.lightSourceX
 
-                    onCurrentLightSourceXChanged: requestPaint()
                     onWidthChanged: requestPaint()
                     onHeightChanged: requestPaint()
                     onPaint: {
@@ -504,8 +501,8 @@ PlasmoidItem {
                         ctx.reset()
                         ctx.clearRect(0, 0, width, height)
 
-                        // Clip the edge-to-edge wire field to the same rounded
-                        // silhouette as the continuous frame drawn below.
+                        // The gray cloth body is translucent, so the drivers
+                        // remain visible without exposing a literal weave grid.
                         var radius = shroudAssembly.frameRadius
                         ctx.beginPath()
                         ctx.moveTo(radius, 0)
@@ -520,40 +517,60 @@ PlasmoidItem {
                         ctx.lineTo(0, radius)
                         ctx.quadraticCurveTo(0, 0, radius, 0)
                         ctx.closePath()
+
+                        var clothTone = ctx.createLinearGradient(0, 0,
+                            width, height)
+                        clothTone.addColorStop(0.0,
+                            "rgba(34, 36, 37, 0.80)")
+                        clothTone.addColorStop(0.48,
+                            "rgba(22, 24, 25, 0.84)")
+                        clothTone.addColorStop(1.0,
+                            "rgba(12, 14, 15, 0.87)")
+                        ctx.fillStyle = clothTone
+                        ctx.fill()
                         ctx.clip()
 
-                        var shortSide = Math.min(width, height)
-                        var spacing = Math.max(3.0, shortSide * 0.022)
-                        var wireWidth = Math.max(0.60,
-                            shortSide * 0.0033)
-                        var highlight = Math.max(0.18, Math.min(0.82,
-                            root.lightSourceX))
-                        var blackMetal = ctx.createLinearGradient(0, 0,
-                            width, 0)
-                        blackMetal.addColorStop(0.0, "#030405")
-                        blackMetal.addColorStop(Math.max(0.03,
-                            highlight - 0.16), "#17191a")
-                        blackMetal.addColorStop(highlight, "#555a5d")
-                        blackMetal.addColorStop(Math.min(0.97,
-                            highlight + 0.16), "#202325")
-                        blackMetal.addColorStop(1.0, "#050607")
+                        // A very broad highlight and edge falloff give the
+                        // otherwise flat overlay a shallow fabric depth.
+                        var depth = ctx.createRadialGradient(
+                            width * 0.42, height * 0.34, 0,
+                            width * 0.50, height * 0.48,
+                            Math.max(width, height) * 0.72)
+                        depth.addColorStop(0.0,
+                            "rgba(145, 147, 144, 0.07)")
+                        depth.addColorStop(0.58,
+                            "rgba(35, 37, 38, 0.02)")
+                        depth.addColorStop(1.0,
+                            "rgba(2, 3, 4, 0.18)")
+                        ctx.fillStyle = depth
+                        ctx.fillRect(0, 0, width, height)
 
-                        ctx.strokeStyle = blackMetal
-                        ctx.lineWidth = wireWidth
-                        for (var rising = -height; rising <= width;
-                             rising += spacing) {
-                            ctx.beginPath()
-                            ctx.moveTo(rising, 0)
-                            ctx.lineTo(rising + height, height)
-                            ctx.stroke()
+                        // Deterministic matte grain: tiny irregular flecks read
+                        // as cloth texture, but never resolve into a line grid.
+                        var area = width * height
+                        var grainCount = Math.min(4400, Math.max(840,
+                            Math.floor(area / 19)))
+                        var seed = ((Math.floor(width) * 73856093)
+                            ^ (Math.floor(height) * 19349663)) >>> 0
+                        function randomUnit() {
+                            seed = (seed * 1664525 + 1013904223) >>> 0
+                            return seed / 4294967296
                         }
-                        for (var falling = 0;
-                             falling <= width + height;
-                             falling += spacing) {
+
+                        for (var pass = 0; pass < 2; pass++) {
                             ctx.beginPath()
-                            ctx.moveTo(falling, 0)
-                            ctx.lineTo(falling - height, height)
-                            ctx.stroke()
+                            for (var grain = pass; grain < grainCount;
+                                 grain += 2) {
+                                var x = randomUnit() * width
+                                var y = randomUnit() * height
+                                var size = 0.28 + randomUnit() * 0.88
+                                ctx.moveTo(x + size, y)
+                                ctx.arc(x, y, size, 0, Math.PI * 2)
+                            }
+                            ctx.fillStyle = pass === 0
+                                ? "rgba(96, 98, 95, 0.12)"
+                                : "rgba(1, 2, 3, 0.19)"
+                            ctx.fill()
                         }
                     }
                 }
@@ -1440,7 +1457,7 @@ PlasmoidItem {
             Loader {
                 id: stereoShroudLoader
                 active: !root.isSubwoofer
-                sourceComponent: blackMetalShroudComponent
+                sourceComponent: acousticClothShroudComponent
                 readonly property real frameClearance:
                     driverColumn.spacing * 0.38
                 width: driverColumn.width * 1.08
@@ -1592,7 +1609,7 @@ PlasmoidItem {
                 Loader {
                     id: subwooferShroudLoader
                     active: root.isSubwoofer
-                    sourceComponent: blackMetalShroudComponent
+                    sourceComponent: acousticClothShroudComponent
                     // Keep the accepted 2% bottom clearance uniformly around
                     // all four sides of the subwoofer mounting frame.
                     width: subwooferDriver.width * 1.04
