@@ -452,6 +452,9 @@ PlasmoidItem {
                 railWidth * 2.2)
             readonly property real holeSize: Math.max(5.0,
                 railWidth * 2.15)
+            property bool showHorizontalSupports: false
+            property real firstSupportY: height / 3
+            property real secondSupportY: height * 2 / 3
 
             // Every shroud uses only four permanent corner mounting holes.
             Repeater {
@@ -488,6 +491,32 @@ PlasmoidItem {
                     Item {
                         id: removableShroud
                         anchors.fill: parent
+
+                // Tall speakers have one support centered in each gap between
+                // adjacent drivers. They are painted before the translucent
+                // cloth so the fabric texture remains continuous over them.
+                Repeater {
+                    model: shroudAssembly.showHorizontalSupports ? 2 : 0
+
+                    Rectangle {
+                        readonly property real supportCenterY: index === 0
+                            ? shroudAssembly.firstSupportY
+                            : shroudAssembly.secondSupportY
+                        x: shroudAssembly.railWidth
+                        y: supportCenterY - height / 2
+                        width: shroudAssembly.width
+                            - shroudAssembly.railWidth * 2
+                        height: Math.max(2.5,
+                            shroudAssembly.railWidth * 1.15)
+                        radius: height / 2
+                        opacity: 0.95
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#555a5d" }
+                            GradientStop { position: 0.42; color: "#17191a" }
+                            GradientStop { position: 1.0; color: "#373b3d" }
+                        }
+                    }
+                }
 
                 Canvas {
                     id: acousticClothCanvas
@@ -1466,6 +1495,19 @@ PlasmoidItem {
                 x: driverColumn.x + (driverColumn.width - width) / 2
                 y: driverColumn.y - frameClearance
                 z: 20
+                onLoaded: {
+                    item.showHorizontalSupports = true
+                    item.firstSupportY = Qt.binding(function() {
+                        return stereoShroudLoader.frameClearance
+                            + driverColumn.width * 0.45
+                            + driverColumn.spacing * 0.5
+                    })
+                    item.secondSupportY = Qt.binding(function() {
+                        return stereoShroudLoader.frameClearance
+                            + driverColumn.width * (0.45 + 0.65)
+                            + driverColumn.spacing * 1.5
+                    })
+                }
             }
 
             // Balanced subwoofer layout. One reference margin controls the
