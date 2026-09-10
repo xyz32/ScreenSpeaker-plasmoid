@@ -550,11 +550,11 @@ PlasmoidItem {
                         var clothTone = ctx.createLinearGradient(0, 0,
                             width, height)
                         clothTone.addColorStop(0.0,
-                            "rgba(34, 36, 37, 0.80)")
+                            "rgba(34, 36, 37, 0.65)")
                         clothTone.addColorStop(0.48,
-                            "rgba(22, 24, 25, 0.84)")
+                            "rgba(22, 24, 25, 0.69)")
                         clothTone.addColorStop(1.0,
-                            "rgba(12, 14, 15, 0.87)")
+                            "rgba(12, 14, 15, 0.72)")
                         ctx.fillStyle = clothTone
                         ctx.fill()
                         ctx.clip()
