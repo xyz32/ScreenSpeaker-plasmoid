@@ -18,12 +18,23 @@ Kirigami.FormLayout {
 
     // Plasma's cfg_<key> convention binds each control to KConfig.
     property alias cfg_channel: channelCombo.currentIndex
-    property alias cfg_skin: skinCombo.currentIndex
+    property int cfg_skin: cfg_skinDefault
     property alias cfg_showGrille: showGrilleCheck.checked
     property alias cfg_showFeet: showFeetCheck.checked
     property alias cfg_followOutputVolume: followOutputVolumeCheck.checked
     property alias cfg_speakerHeight: speakerHeightSpin.value
     property alias cfg_subwooferHeight: subwooferHeightSpin.value
+
+    function syncSkinCombo() {
+        if (!skinCombo)
+            return
+        var index = skinCombo.indexOfValue(page.cfg_skin)
+        if (index >= 0 && skinCombo.currentIndex !== index)
+            skinCombo.currentIndex = index
+    }
+
+    onCfg_skinChanged: syncSkinCombo()
+    Component.onCompleted: syncSkinCombo()
 
     Label {
         Layout.topMargin: Kirigami.Units.smallSpacing * 2
@@ -83,8 +94,15 @@ Kirigami.FormLayout {
             id: skinCombo
             Layout.preferredWidth: Kirigami.Units.gridUnit * 9
             Layout.maximumWidth: Kirigami.Units.gridUnit * 9
-            model: [i18n("Cherry Wood"), i18n("Dark Grey"),
-                i18n("Mahogany"), i18n("Black Wood")]
+            textRole: "label"
+            valueRole: "skinId"
+            model: [
+                { "label": i18n("Cherry Wood"), "skinId": 0 },
+                { "label": i18n("Mahogany Wood"), "skinId": 2 },
+                { "label": i18n("Black Wood"), "skinId": 3 },
+                { "label": i18n("Dark Grey"), "skinId": 1 }
+            ]
+            onActivated: page.cfg_skin = currentValue
         }
 
         CheckBox {
