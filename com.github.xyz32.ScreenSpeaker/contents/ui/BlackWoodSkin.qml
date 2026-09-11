@@ -1,6 +1,6 @@
 import QtQuick
 
-// Classic mahogany cabinet with polished-brass conical feet.
+// Black-stained wood cabinet with subtle grain and polished-brass conical feet.
 Item {
     id: root
 
@@ -21,17 +21,17 @@ Item {
         radius: 4
         gradient: Gradient {
             orientation: Gradient.Vertical
-            GradientStop { position: 0.0; color: "#7d2118" }
-            GradientStop { position: 0.28; color: "#59130f" }
-            GradientStop { position: 0.55; color: "#8b2c1d" }
-            GradientStop { position: 0.78; color: "#651812" }
-            GradientStop { position: 1.0; color: "#46100d" }
+            GradientStop { position: 0.0; color: "#2e2d2c" }
+            GradientStop { position: 0.28; color: "#1d1c1b" }
+            GradientStop { position: 0.55; color: "#262423" }
+            GradientStop { position: 0.78; color: "#141312" }
+            GradientStop { position: 1.0; color: "#0b0a09" }
         }
 
         Canvas {
             anchors.fill: parent
             anchors.margins: 1
-            opacity: 0.38
+            opacity: 0.30
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             onPaint: {
@@ -51,7 +51,7 @@ Item {
                         else
                             ctx.lineTo(baseX + bend, y)
                     }
-                    ctx.strokeStyle = (i % 4 === 0) ? "#b96836" : "#2b0707"
+                    ctx.strokeStyle = (i % 4 === 0) ? "#2b2723" : "#040303"
                     ctx.lineWidth = Math.max(0.6, width * (i % 4 === 0 ? 0.0022 : 0.0038))
                     ctx.stroke()
                 }
@@ -66,10 +66,10 @@ Item {
             opacity: Math.abs(root.lightBias)
             gradient: Gradient {
                 orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: "#32ffd6b0" }
+                GradientStop { position: 0.0; color: "#26ffffff" }
                 GradientStop { position: 0.18; color: "#0cffffff" }
                 GradientStop { position: 0.58; color: "#00ffffff" }
-                GradientStop { position: 1.0; color: "#40230403" }
+                GradientStop { position: 1.0; color: "#40050404" }
             }
         }
     }
@@ -113,7 +113,7 @@ Item {
 
             // Canvas clips the polish gradient to a short tapered cone.
             Canvas {
-                id: goldFoot
+                id: brassFoot
                 anchors.fill: parent
                 property real currentLightSourceX: root.lightSourceX
                 onCurrentLightSourceXChanged: requestPaint()
@@ -126,12 +126,12 @@ Item {
 
                     var fromX = root.lightBias >= 0 ? 0 : width
                     var toX = root.lightBias >= 0 ? width : 0
-                    var gold = ctx.createLinearGradient(fromX, 0, toX, 0)
-                    gold.addColorStop(0.0, "#6e4308")
-                    gold.addColorStop(0.20, "#fff1a6")
-                    gold.addColorStop(0.42, "#d9a629")
-                    gold.addColorStop(0.72, "#8c570a")
-                    gold.addColorStop(1.0, "#4b2b04")
+                    var brass = ctx.createLinearGradient(fromX, 0, toX, 0)
+                    brass.addColorStop(0.0, "#6e4308")
+                    brass.addColorStop(0.20, "#fff1a6")
+                    brass.addColorStop(0.42, "#d9a629")
+                    brass.addColorStop(0.72, "#8c570a")
+                    brass.addColorStop(1.0, "#4b2b04")
 
                     ctx.beginPath()
                     ctx.moveTo(width * 0.10, 0)
@@ -139,7 +139,7 @@ Item {
                     ctx.lineTo(width * 0.64, height)
                     ctx.lineTo(width * 0.36, height)
                     ctx.closePath()
-                    ctx.fillStyle = gold
+                    ctx.fillStyle = brass
                     ctx.fill()
                 }
             }

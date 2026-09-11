@@ -84,7 +84,7 @@ Kirigami.FormLayout {
             Layout.preferredWidth: Kirigami.Units.gridUnit * 9
             Layout.maximumWidth: Kirigami.Units.gridUnit * 9
             model: [i18n("Cherry Wood"), i18n("Dark Grey"),
-                i18n("Mahogany")]
+                i18n("Mahogany"), i18n("Black Wood")]
         }
 
         CheckBox {

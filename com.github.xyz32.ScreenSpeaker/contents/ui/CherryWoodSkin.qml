@@ -51,7 +51,7 @@ Item {
                         else
                             ctx.lineTo(baseX + bend, y)
                     }
-                    ctx.strokeStyle = (i % 4 === 0) ? "#ffd0aa" : "#5e1818"
+                    ctx.strokeStyle = (i % 4 === 0) ? "#dd9a6b" : "#5e1818"
                     ctx.lineWidth = Math.max(0.55, width * (i % 4 === 0 ? 0.002 : 0.0035))
                     ctx.stroke()
                 }

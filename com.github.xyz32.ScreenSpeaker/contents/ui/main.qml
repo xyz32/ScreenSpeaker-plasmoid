@@ -13,7 +13,7 @@ PlasmoidItem {
 
     // Per-instance configuration: channel and cabinet skin.
     // channel: 0=Left, 1=Right, 2=Subwoofer; skin: 0=Cherry Wood,
-    // 1=Dark Grey, 2=Mahogany.
+    // 1=Dark Grey, 2=Mahogany, 3=Black Wood.
     readonly property int channel: Plasmoid.configuration.channel
     readonly property int skin: Plasmoid.configuration.skin
     readonly property bool isSubwoofer: root.channel === 2
@@ -1068,7 +1068,9 @@ PlasmoidItem {
                             ? Qt.resolvedUrl("DarkGreySkin.qml")
                             : root.skin === 2
                               ? Qt.resolvedUrl("MahoganySkin.qml")
-                              : Qt.resolvedUrl("CherryWoodSkin.qml")
+                              : root.skin === 3
+                                ? Qt.resolvedUrl("BlackWoodSkin.qml")
+                                : Qt.resolvedUrl("CherryWoodSkin.qml")
                     onLoaded: {
                         item.isSubwoofer = Qt.binding(function() {
                             return root.isSubwoofer
