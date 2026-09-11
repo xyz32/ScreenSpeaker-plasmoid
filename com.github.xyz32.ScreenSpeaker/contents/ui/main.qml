@@ -18,6 +18,7 @@ PlasmoidItem {
     readonly property int skin: Plasmoid.configuration.skin
     readonly property bool isSubwoofer: root.channel === 2
     readonly property bool showGrille: Plasmoid.configuration.showGrille
+    readonly property bool showFeet: Plasmoid.configuration.showFeet
     readonly property bool followOutputVolume:
         Plasmoid.configuration.followOutputVolume
 
@@ -1053,8 +1054,9 @@ PlasmoidItem {
             Item {
                 id: cabinet
                 anchors.top: parent.top
-                readonly property real reservedFootHeight: fitBox.height
-                    * (root.isSubwoofer ? 0.044 : 0.022)
+                readonly property real reservedFootHeight: root.showFeet
+                    ? fitBox.height * (root.isSubwoofer ? 0.044 : 0.022)
+                    : 0
                 width: parent.width
                 height: parent.height - reservedFootHeight
 
@@ -1073,6 +1075,9 @@ PlasmoidItem {
                         })
                         item.lightSourceX = Qt.binding(function() {
                             return root.lightSourceX
+                        })
+                        item.showFeet = Qt.binding(function() {
+                            return root.showFeet
                         })
                     }
                 }

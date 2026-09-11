@@ -11,6 +11,7 @@ Kirigami.FormLayout {
     property int cfg_channelDefault: 0
     property int cfg_skinDefault: 0
     property bool cfg_showGrilleDefault: true
+    property bool cfg_showFeetDefault: true
     property bool cfg_followOutputVolumeDefault: true
     property int cfg_speakerHeightDefault: 500
     property int cfg_subwooferHeightDefault: 250
@@ -19,6 +20,7 @@ Kirigami.FormLayout {
     property alias cfg_channel: channelCombo.currentIndex
     property alias cfg_skin: skinCombo.currentIndex
     property alias cfg_showGrille: showGrilleCheck.checked
+    property alias cfg_showFeet: showFeetCheck.checked
     property alias cfg_followOutputVolume: followOutputVolumeCheck.checked
     property alias cfg_speakerHeight: speakerHeightSpin.value
     property alias cfg_subwooferHeight: subwooferHeightSpin.value
@@ -88,6 +90,12 @@ Kirigami.FormLayout {
         CheckBox {
             id: showGrilleCheck
             text: i18n("Cloth screen")
+            checked: true
+        }
+
+        CheckBox {
+            id: showFeetCheck
+            text: i18n("Speaker feet")
             checked: true
         }
     }
