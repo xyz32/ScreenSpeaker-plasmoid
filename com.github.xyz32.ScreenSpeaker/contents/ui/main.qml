@@ -1497,7 +1497,7 @@ PlasmoidItem {
                                : parent.width * 0.08
                             text: "Technics"
                             font.bold: true
-                            font.pixelSize: parent.height * 0.92
+                            font.pixelSize: parent.height * 0.62
                             font.family: "Serif"
                             color: footerControls.inlayText
                             opacity: 0.78
