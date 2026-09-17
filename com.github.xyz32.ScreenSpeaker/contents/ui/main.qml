@@ -1770,7 +1770,9 @@ PlasmoidItem {
                     }
 
                     Text {
-                        anchors.centerIn: parent
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: parent.height * 0.06
                         text: "Technics"
                         font.bold: true
                         font.family: "Serif"
