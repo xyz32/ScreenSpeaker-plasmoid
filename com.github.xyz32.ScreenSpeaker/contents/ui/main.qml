@@ -1423,51 +1423,108 @@ PlasmoidItem {
                 }
 
 
-                // --- 4. BRAND LOGO, CHANNEL BADGE & BASS PORT ---
+                // --- 4. BRAND LOGO, CHANNEL MARK & BASS PORT ---
                 Item {
                     id: footerControls
                     width: parent.width
                     height: parent.height * 0.12
 
-                    Text {
-                        text: "Technics"
-                        font.bold: true
-                        font.pixelSize: parent.height * 0.35
-                        font.family: "Serif"
-                        color: "#e6d7b8"
+                    // The inlay uses a restrained version of each cabinet's own
+                    // palette so the brand and channel read as cabinet details.
+                    readonly property color inlayBase: root.skin === 0 ? "#713027"
+                                                      : root.skin === 1 ? "#121212"
+                                                      : root.skin === 2 ? "#3d0e0a"
+                                                                        : "#0b0a09"
+                    readonly property color inlayHighlight: root.skin === 0 ? "#dc9670"
+                                                           : root.skin === 1 ? "#686868"
+                                                           : root.skin === 2 ? "#b95d3d"
+                                                                             : "#4c4741"
+                    readonly property color inlayText: root.skin === 0 ? "#e1a57f"
+                                                      : root.skin === 1 ? "#929292"
+                                                      : root.skin === 2 ? "#d08462"
+                                                                        : "#777069"
+
+                    // The footer starts one Column spacing below the woofer.
+                    // Center the inlay in the full gap from that woofer edge
+                    // to the top edge of the air port.
+                    Item {
+                        id: footerInlay
+                        width: Math.min(parent.width * 0.68, parent.height * 3.3)
+                        height: parent.height * 0.26
                         anchors.horizontalCenter: parent.horizontalCenter
-                        // The footer starts one Column spacing below the woofer.
-                        // Center the logo in the full gap from that woofer edge
-                        // to the top edge of the air port.
                         y: (-driverColumn.spacing + bassPort.y - height) / 2
-                    }
 
-                    // Passive channel indicator for stereo speakers. Channel
-                    // selection is handled exclusively by the configuration menu.
-                    Rectangle {
-                        id: channelBadge
-                        readonly property real badgeSize: parent.height * 0.34
-                        width: badgeSize
-                        height: badgeSize
-                        radius: 4
-                        color: "#0d0c0b"
-                        border.color: "#00a887"
-                        border.width: 2
-                        anchors.verticalCenter: bassPort.verticalCenter
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: height * 0.28
+                            color: footerControls.inlayBase
+                            border.color: "#160b09"
+                            border.width: 1
 
-                        // Keep Left on the left and Right on the right.
-                        x: root.channel === 0
-                             ? parent.width * 0.05
-                             : parent.width - badgeSize - parent.width * 0.05
-                        Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                            // The highlight enters from the current light side;
+                            // rotating the gradient also puts the deeper shade
+                            // on the far edge of the recessed plaque.
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                radius: parent.radius - 1
+                                rotation: root.lightBias >= 0 ? 0 : 180
+                                opacity: 0.20 + Math.abs(root.lightBias) * 0.24
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: footerControls.inlayHighlight }
+                                    GradientStop { position: 0.34; color: "transparent" }
+                                    GradientStop { position: 1.0; color: "#000000" }
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                radius: parent.radius - 2
+                                color: "transparent"
+                                border.color: footerControls.inlayHighlight
+                                border.width: 1
+                                opacity: 0.16 + Math.abs(root.lightBias) * 0.18
+                            }
+                        }
 
                         Text {
-                            anchors.centerIn: parent
+                            id: technicsMark
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: root.channel === 0
+                               ? parent.width - width - parent.width * 0.08
+                               : parent.width * 0.08
+                            text: "Technics"
+                            font.bold: true
+                            font.pixelSize: parent.height * 0.92
+                            font.family: "Serif"
+                            color: footerControls.inlayText
+                            opacity: 0.78
+                        }
+
+                        Rectangle {
+                            width: 1
+                            height: parent.height * 0.52
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: root.channel === 0
+                               ? parent.width * 0.26
+                               : parent.width * 0.74
+                            color: footerControls.inlayHighlight
+                            opacity: 0.34
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: root.channel === 0
+                               ? parent.width * 0.10 - width / 2
+                               : parent.width * 0.90 - width / 2
                             text: fullRep.channelLabel
                             font.bold: true
-                            font.pixelSize: parent.height * 0.6
+                            font.pixelSize: parent.height * 0.64
                             font.family: "Sans"
-                            color: "#00d9ae"
+                            color: footerControls.inlayText
+                            opacity: 0.86
                         }
                     }
 
@@ -1670,16 +1727,57 @@ PlasmoidItem {
                     z: 20
                 }
 
-                Text {
-                    text: "Technics"
-                    font.bold: true
-                    font.family: "Serif"
-                    font.pixelSize: Math.min(subwooferLayout.driverSize * 0.065,
-                        subwooferLayout.lowerGapHeight * 0.58)
-                    color: "#e6d7b8"
+                Item {
+                    id: subwooferInlay
+                    width: Math.min(parent.width * 0.42,
+                        subwooferLayout.lowerGapHeight * 2.55)
+                    height: Math.min(subwooferLayout.lowerGapHeight * 0.66,
+                        parent.width * 0.12)
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: subwooferLayout.lowerGapTop
                        + (subwooferLayout.lowerGapHeight - height) / 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height * 0.28
+                        color: footerControls.inlayBase
+                        border.color: "#160b09"
+                        border.width: 1
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            radius: parent.radius - 1
+                            rotation: root.lightBias >= 0 ? 0 : 180
+                            opacity: 0.20 + Math.abs(root.lightBias) * 0.24
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: footerControls.inlayHighlight }
+                                GradientStop { position: 0.34; color: "transparent" }
+                                GradientStop { position: 1.0; color: "#000000" }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            radius: parent.radius - 1
+                            color: "transparent"
+                            border.color: footerControls.inlayHighlight
+                            border.width: 1
+                            opacity: 0.16 + Math.abs(root.lightBias) * 0.18
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Technics"
+                        font.bold: true
+                        font.family: "Serif"
+                        font.pixelSize: parent.height * 0.60
+                        color: footerControls.inlayText
+                        opacity: 0.78
+                    }
                 }
 
                 Rectangle {
