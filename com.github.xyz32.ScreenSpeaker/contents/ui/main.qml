@@ -1450,7 +1450,7 @@ PlasmoidItem {
                     Item {
                         id: footerInlay
                         width: Math.min(parent.width * 0.68, parent.height * 3.3)
-                        height: parent.height * 0.26
+                        height: parent.height * 0.34
                         anchors.horizontalCenter: parent.horizontalCenter
                         y: (-driverColumn.spacing + bassPort.y - height) / 2
 
